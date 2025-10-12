@@ -34,6 +34,9 @@ while True:
         print("Hata: Kare okunamadı.")
         break
 
+    # Görüntüyü yatay olarak çevir (aynalanma sorununu düzelt)
+    frame = cv2.flip(frame, 1)
+
     # FPS hesaplaması için kare sayacını artır
     fps_frame_count += 1
     
