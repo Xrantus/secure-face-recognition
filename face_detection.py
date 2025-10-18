@@ -103,29 +103,21 @@ while running:
                         )
                         
                         if len(faces) > 0:
-                            face = max(faces, key=lambda x: x[2] * x[3])
-                            fx, fy, fw, fh = face
-                            
-                            face_x1 = x1 + fx
-                            face_y1 = y1 + fy
-                            face_x2 = x1 + fx + fw
-                            face_y2 = y1 + fy + fh
-                            
-                            cv2.rectangle(frame, (face_x1, face_y1), (face_x2, face_y2), (0, 255, 0), 2)
-                            
-                            label = f'Face {confidence:.2f}'
-                            cv2.putText(frame, label, (face_x1, face_y1 - 10), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-                        else:
-                            face_height = int((y2 - y1) * 0.3)
-                            face_y1 = y1
-                            face_y2 = y1 + face_height
-                            
-                            cv2.rectangle(frame, (x1, face_y1), (x2, face_y2), (0, 255, 0), 2)
-                            
-                            label = f'Face (Est) {confidence:.2f}'
-                            cv2.putText(frame, label, (x1, face_y1 - 10), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                            for (fx, fy, fw, fh) in faces:
+                                # Her yüzün koordinatlarını global kareye göre hesapla
+                                face_x1 = x1 + fx
+                                face_y1 = y1 + fy
+                                face_x2 = x1 + fx + fw
+                                face_y2 = y1 + fy + fh
+                                
+                                face_crop = frame[face_y1:face_y2, face_x1:face_x2]
+
+                                
+
+                                cv2.rectangle(frame, (face_x1, face_y1), (face_x2, face_y2), (0, 255, 0), 2)
+                                label = f'Face {confidence:.2f}'
+                                cv2.putText(frame, label, (face_x1, face_y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        
 
     if time.time() - fps_start_time >= 1.0:
         fps = fps_frame_count / (time.time() - fps_start_time)
