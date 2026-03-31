@@ -3,7 +3,7 @@ import time
 import statistics
 from ultralytics import YOLO
 
-# Kullanılacak modeller
+# Models to be used
 MODELS = {
     'YOLOv8n': 'yolov8n.pt',
     'YOLOv10n': 'yolov10n.pt',
@@ -11,37 +11,37 @@ MODELS = {
     'YOLO12n': 'yolo12n.pt'
 }
 
-# Video dosyasının yolu
+# Video file path
 VIDEO_PATH = 'demo_video.mp4'
 
 def test_video_with_models():
-    """Çoklu modelleri video üzerinde test eder ve karşılaştırır"""
+    """Tests multiple models on video and compares them"""
 
-    # Video dosyasını aç
+    # Open video file
     cap = cv2.VideoCapture(VIDEO_PATH)
     if not cap.isOpened():
-        print(f"Hata: {VIDEO_PATH} açılamadı.")
+        print(f"Error: {VIDEO_PATH} could not be opened.")
         return
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    print(f"Toplam kare sayısı: {total_frames}")
+    print(f"Total frame count: {total_frames}")
     print("=" * 50)
 
-    # Her model için sonuçları saklayacak sözlükler
+    # Dictionaries to store results for each model
     results = {}
 
     for model_name, model_path in MODELS.items():
-        print(f"\n{model_name} test ediliyor...")
+        print(f"\n{model_name} is being tested...")
 
-        # Modeli yükle
+        # Load model
         model = YOLO(model_path)
 
-        # Bu model için verileri sakla
+        # Store data for this model
         fps_values = []
         total_objects = 0
         frame_count = 0
 
-        # Video başından itibaren işle
+        # Process from the beginning of the video
         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
         while True:
@@ -49,32 +49,32 @@ def test_video_with_models():
             if not ret:
                 break
 
-            # Kare sayısını artır
+            # Increment frame count
             frame_count += 1
 
-            # FPS hesabı için başlangıç zamanı
+            # Start time for FPS calculation
             start_time = time.time()
 
-            # Nesne tespiti yap
+            # Perform object detection
             results_model = model(frame, stream=True, imgsz=640, verbose=False)
 
-            # Sonuçları işle
+            # Process results
             detected_objects = 0
             for r in results_model:
                 detected_objects += len(r.boxes)
 
             total_objects += detected_objects
 
-            # FPS hesapla
+            # Calculate FPS
             end_time = time.time()
             fps = 1 / (end_time - start_time)
             fps_values.append(fps)
 
-            # Her 100 karede bir durum göster
+            # Show status every 100 frames
             if frame_count % 100 == 0:
-                print(f"  {frame_count}/{total_frames} kare işlendi...")
+                print(f"  {frame_count}/{total_frames} frames processed...")
 
-        # Bu model için istatistikleri hesapla
+        # Calculate statistics for this model
         avg_fps = statistics.mean(fps_values)
         min_fps = min(fps_values)
         max_fps = max(fps_values)
@@ -89,16 +89,16 @@ def test_video_with_models():
             'processed_frames': frame_count
         }
 
-        print(f"  Ortalama FPS: {avg_fps:.2f}")
-        print(f"  FPS aralığı: {min_fps:.2f} - {max_fps:.2f}")
-        print(f"  Kare başına ortalama nesne: {avg_objects:.2f}")
-        print(f"  Toplam tespit edilen nesne: {total_objects}")
+        print(f"  Average FPS: {avg_fps:.2f}")
+        print(f"  FPS range: {min_fps:.2f} - {max_fps:.2f}")
+        print(f"  Average objects per frame: {avg_objects:.2f}")
+        print(f"  Total detected objects: {total_objects}")
 
-    # Sonuçları göster
+    # Display results
     print("\n" + "=" * 70)
-    print("KARŞILAŞTIRMA SONUÇLARI")
+    print("COMPARISON RESULTS")
     print("=" * 70)
-    print(f"{'Model':<12} {'Ort.FPS':<10} {'Min FPS':<10} {'Max FPS':<10} {'Nesne/Kare':<12} {'Toplam Nesne':<12}")
+    print(f"{'Model':<12} {'Avg.FPS':<10} {'Min FPS':<10} {'Max FPS':<10} {'Objects/Frame':<12} {'Total Objects':<12}")
     print("-" * 70)
 
     for model_name in results:
@@ -107,15 +107,15 @@ def test_video_with_models():
 
     print("-" * 70)
 
-    # En iyi performansı bul
+    # Find best performance
     best_fps = max(results.items(), key=lambda x: x[1]['avg_fps'])
     best_object_detection = max(results.items(), key=lambda x: x[1]['avg_objects'])
 
-    print("EN İYİ PERFORMANS:")
-    print(f"  En yüksek FPS: {best_fps[0]} ({best_fps[1]['avg_fps']:.2f} FPS)")
-    print(f"  En çok nesne tespiti: {best_object_detection[0]} ({best_object_detection[1]['avg_objects']:.2f} nesne/kare)")
+    print("BEST PERFORMANCE:")
+    print(f"  Highest FPS: {best_fps[0]} ({best_fps[1]['avg_fps']:.2f} FPS)")
+    print(f"  Most object detection: {best_object_detection[0]} ({best_object_detection[1]['avg_objects']:.2f} objects/frame)")
 
-    # Kaynakları temizle
+    # Clean up resources
     cap.release()
 
 if __name__ == "__main__":

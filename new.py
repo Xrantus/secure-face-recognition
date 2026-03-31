@@ -179,13 +179,30 @@ def take_screenshot(frame):
     cv2.imwrite(screenshot_path, frame)
     print(f"Ekran görüntüsü kaydedildi: {screenshot_filename}")
 
+# --- PERFORMANS OPTİMİZASYONU AYARLARI ---
+TARGET_FPS = 30  # Hedef FPS
+FRAME_TIME = 1.0 / TARGET_FPS  # Her kare için geçmesi gereken süre (saniye)
+
+PROCESS_INTERVAL = 10  # Her 10 karede bir yüz tanıma yap (daha seyrek)
+PERSISTENT_BOXES_DURATION = 60  # Bounding box'ları 60 kare göster (2 saniye @ 30fps)
+
 # --- GERÇEK ZAMANLI TANIMA DÖNGÜSÜ ---
 frame_count = 0
-process_interval = 5 # Her 5 karede bir işlem yap
+last_process_frame = 0
+persistent_boxes = []  # Önceki tanıma sonuçlarını sakla
+box_frame_counter = {}  # Her bounding box'ın gösterim süresini takip et
+
 window_name = "Ahmet Tanima - Cikis icin 'q'" # Pencere başlığı
+
+# FPS hesaplama için değişkenler
+fps_start_time = time.time()
+fps_frame_count = 0
+current_fps = 0.0
 
 try:
     while True:
+        loop_start_time = time.time()
+
         # Kameradan bir kare oku
         ret, frame = cap.read()
         if not ret or frame is None:
@@ -196,9 +213,18 @@ try:
         # Görüntüyü yatay olarak çevir (ayna efekti için)
         processed_frame = cv2.flip(frame, 1)
         frame_count += 1
+        fps_frame_count += 1
 
-        # Sadece belirli aralıklarla işlem yap
-        if frame_count % process_interval == 0:
+        # FPS hesapla (her saniye)
+        if fps_frame_count % 30 == 0:
+            elapsed_time = time.time() - fps_start_time
+            current_fps = 30 / elapsed_time if elapsed_time > 0 else 0
+            fps_start_time = time.time()
+            fps_frame_count = 0
+
+        # Sadece belirli aralıklarla yüz tanıma yap (daha seyrek)
+        current_boxes = []
+        if frame_count - last_process_frame >= PROCESS_INTERVAL:
             # YOLO ile 'person' tespiti
             person_boxes = detect_person(processed_frame, yolo_model)
 
@@ -224,34 +250,83 @@ try:
                             identity_path = best_match['identity']
                             distance = best_match['distance']
 
-                            # Ahmet kontrolü (Veritabanı yolu içeriyor mu?)
-                            if ahmet_database_path in identity_path:
-                                label = f"Ahmet ({distance:.2f})"
-                                color = (0, 255, 0) # Yeşil
-                            # else: # Başka kişiler olsaydı
-                            #     name = os.path.basename(os.path.dirname(identity_path))
-                            #     label = f"Not Ahmet ({name} - {distance:.2f})"
-                            #     color = (0, 165, 255) # Turuncu
+                            # Kişi adını klasör isminden al
+                            person_folder = os.path.basename(os.path.dirname(identity_path))
+                            person_name = person_folder
 
-                    # Çerçeveyi ve etiketi çiz
-                    x1, y1, x2, y2 = bbox
-                    cv2.rectangle(processed_frame, (x1, y1), (x2, y2), color, 2)
-                    cv2.putText(processed_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-                else:
-                    x1, y1, x2, y2 = bbox
-                    cv2.rectangle(processed_frame, (x1, y1), (x2, y2), (128, 128, 128), 1)
+                            # Bilinen kişilerin renklerini belirle
+                            if person_name == "Ahmet":
+                                color = (0, 255, 0) # Yeşil - Ahmet
+                                label = f"Ahmet ({distance:.2f})"
+                            elif person_name == "Hatice":
+                                color = (255, 0, 255) # Magenta - Hatice
+                                label = f"Hatice ({distance:.2f})"
+                            else:
+                                color = (0, 165, 255) # Turuncu - Diğer kişiler
+                                label = f"{person_name} ({distance:.2f})"
+
+                    # Bounding box bilgilerini persistent_boxes'a ekle
+                    box_info = {
+                        'bbox': bbox,
+                        'label': label,
+                        'color': color,
+                        'frame_count': frame_count
+                    }
+                    current_boxes.append(box_info)
+
+            # İşlem yapıldı olarak işaretle
+            last_process_frame = frame_count
+
+        # Önceki tanıma sonuçlarını güncelle ve çiz
+        if current_boxes:
+            # Yeni sonuçları persistent_boxes'a ekle
+            persistent_boxes.extend(current_boxes)
+            # Her bounding box için sayaç başlat
+            for box_info in current_boxes:
+                box_key = f"{box_info['bbox']}_{frame_count}"
+                box_frame_counter[box_key] = 0
+
+        # Süresi dolan bounding box'ları temizle
+        persistent_boxes = [
+            box for box in persistent_boxes
+            if frame_count - box['frame_count'] < PERSISTENT_BOXES_DURATION
+        ]
+
+        # Tüm persistent bounding box'ları çiz
+        for box_info in persistent_boxes:
+            x1, y1, x2, y2 = box_info['bbox']
+            color = box_info['color']
+            label = box_info['label']
+
+            # Bounding box'ı çiz
+            cv2.rectangle(processed_frame, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(processed_frame, label, (x1, y1 - 10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
         # Video kaydediliyorsa kareyi kaydet
         if recording and video_writer is not None:
             video_writer.write(processed_frame)
 
-        # Ekranda kayıt durumunu göster
+        # Ekranda bilgi göster
         status_text = "KAYIT: AKTIF" if recording else "KAYIT: DURDURULDU"
         cv2.putText(processed_frame, status_text, (10, 30),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0) if recording else (0, 0, 255), 2)
 
+        # FPS ve performans bilgilerini göster
+        fps_text = f"FPS: {current_fps:.1f}"
+        process_text = f"Son islem: {frame_count - last_process_frame} kare once"
+        cv2.putText(processed_frame, fps_text, (10, 60),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+        cv2.putText(processed_frame, process_text, (10, 90),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+
         # İşlenmiş kareyi ekranda göster
         cv2.imshow(window_name, processed_frame)
+
+        # FPS kontrolü için bekleme
+        elapsed_time = time.time() - loop_start_time
+        remaining_time = max(0, FRAME_TIME - elapsed_time)
+        time.sleep(remaining_time)
 
         # Tuş kontrolleri
         key = cv2.waitKey(1) & 0xFF

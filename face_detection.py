@@ -22,10 +22,10 @@ yolo = YOLO("yolo11n.pt")
 
 # InsightFace (GPU varsa 0, yoksa CPU -1)
 try:
-    app = FaceAnalysis(name="buffalo_l", root=".")
+    app = FaceAnalysis(name="buffalo_s", root=".")
     app.prepare(ctx_id=0, det_size=DET_SIZE)
 except Exception:
-    app = FaceAnalysis(name="buffalo_l", root=".")
+    app = FaceAnalysis(name="buffalo_s", root=".")
     app.prepare(ctx_id=-1, det_size=DET_SIZE)
 
 # 2) Veritabani yukle
