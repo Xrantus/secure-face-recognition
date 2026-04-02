@@ -5,10 +5,12 @@ import os
 import numpy as np
 from ultralytics import YOLO
 from insightface.app import FaceAnalysis
+from insightface.utils import face_align
 
 # ================== AYARLAR ==================
 FRAME_SKIP = 8                          # FPS dengesini korumak icin 8'e cikarildi
-YOLO_IMG_SIZE = 320                     # 320'den 416'ya cikarildi (Daha net gorus)
+# Varsayilan; WIDERFACE INT8 TFLite yuklenirse asagida 640 yapilir (sabit 640x640 export)
+YOLO_IMG_SIZE = 320
 YOLO_DET_THRESHOLD = 0.15               # 0.25'ten 0.15'e cekildi (Zor yuzleri de alir)
 YOLO_TARGET_CLASS = None                
 YOLO_TARGET_CLASS_ID = 0                
@@ -17,16 +19,18 @@ DEBUG_YOLO = True
 DB_PATH = "known_faces_embeddings.npz"  
 RECOG_THRESHOLD = 0.50                  # 0.55'ten 0.50'ye cekildi (Açılı yuzlerde tolerans artirildi)
 MIN_FACE_SIZE = 35                      # 60'tan 35'e cekildi (Uzaktaki yuzler engellenmeyecek)
+LANDMARK_PAD = 0.20                     # Landmark icin YOLO kutusu genisletme (baglam)
 DET_SIZE = (320, 320)                   
 CAM_INDEX = 0
 # ============================================
 
 # 1) Modelleri Yukle
 selected_yolo_model = None
-if os.path.exists("face_yolo11_best_int8.onnx"):
-    print("YOLO INT8 ONNX modeli yukleniyor (face_yolo11_best_int8.onnx)...")
-    selected_yolo_model = "face_yolo11_best_int8.onnx"
+if os.path.exists("face_yolo11_widerface_best_int8.tflite"):
+    print("YOLO INT8 TFLite yukleniyor (face_yolo11_widerface_best_int8.tflite)...")
+    selected_yolo_model = "face_yolo11_widerface_best_int8.tflite"
     yolo = YOLO(selected_yolo_model, task="detect")
+    YOLO_IMG_SIZE = 640  # TFLite export sabit 640x640; 320 verilirse tensor boyutu hatasi
 elif os.path.exists("face_yolo11_best.onnx"):
     print("YOLO ONNX modeli yukleniyor (face_yolo11_best.onnx)...")
     selected_yolo_model = "face_yolo11_best.onnx"
@@ -36,6 +40,7 @@ else:
     selected_yolo_model = "face_yolo11_best.pt"
     yolo = YOLO(selected_yolo_model, task="detect")
 
+print(f"YOLO infer imgsz: {YOLO_IMG_SIZE}")
 print("InsightFace 'buffalo_s' (MobileFaceNet) yukleniyor...")
 app = FaceAnalysis(name="buffalo_s", root=".", allowed_modules=['detection', 'recognition'])
 app.prepare(ctx_id=-1, det_size=DET_SIZE)
@@ -48,7 +53,7 @@ try:
     DB_EMBS = DB_EMBS / np.linalg.norm(DB_EMBS, axis=1, keepdims=True)
     print(f"Veritabani yuklendi: {DB_PATH} | Kayitli kisi sayisi: {len(DB_NAMES)}")
 except Exception as e:
-    raise SystemExit(f"Embedding veritabani yuklenemedi: {e}. Lutfen create_db.py'yi calistirdigindan emin ol.")
+    raise SystemExit(f"Embedding veritabani yuklenemedi: {e}. Lutfen new_db.py ile guncel pipeline ile DB olusturdugundan emin ol.")
 
 # 3) Yardimci Fonksiyonlar
 def cosine_similarity(a, b):
@@ -66,6 +71,22 @@ def predict_identity(emb):
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
+
+
+def _landmarks_list(kpss):
+    """det_model.detect ciktisi list veya ndarray; (5,2) landmark listesine cevir."""
+    if kpss is None:
+        return []
+    if isinstance(kpss, np.ndarray):
+        if kpss.size == 0:
+            return []
+        if kpss.ndim == 2 and kpss.shape == (5, 2):
+            return [kpss]
+        if kpss.ndim == 3 and kpss.shape[1:] == (5, 2):
+            return [kpss[i] for i in range(kpss.shape[0])]
+        return []
+    return [np.asarray(k) for k in kpss] if kpss else []
+
 
 # 4) Kamera Okuma Thread'i
 latest_frame = None
@@ -124,7 +145,7 @@ while running:
             yolo_out = yolo(frame, stream=True, imgsz=YOLO_IMG_SIZE, verbose=False)
             last_results = list(yolo_out)
         except Exception as e:
-            if selected_yolo_model == "face_yolo11_best_int8.onnx" and os.path.exists("face_yolo11_best.onnx"):
+            if selected_yolo_model == "face_yolo11_widerface_best_int8.tflite" and os.path.exists("face_yolo11_best.onnx"):
                 print(f"INT8 model hatasi alindi: {e}")
                 print("FP32 ONNX modele geciliyor (face_yolo11_best.onnx)...")
                 selected_yolo_model = "face_yolo11_best.onnx"
@@ -159,36 +180,40 @@ while running:
                 if x2 <= x1 or y2 <= y1:
                     continue
 
-                roi = frame[y1:y2, x1:x2]
+                face_w, face_h = x2 - x1, y2 - y1
+                if min(face_w, face_h) < MIN_FACE_SIZE:
+                    continue
+
+                pw = int(face_w * LANDMARK_PAD)
+                ph = int(face_h * LANDMARK_PAD)
+                x1e = max(0, x1 - pw)
+                y1e = max(0, y1 - ph)
+                x2e = min(W, x2 + pw)
+                y2e = min(H, y2 + ph)
+                roi = frame[y1e:y2e, x1e:x2e]
                 if roi.size == 0:
                     continue
 
-                faces = app.get(roi)
-                
-                # VARSAYILAN: Sari Kutu (Sadece YOLO buldu, InsightFace isleyemedi)
-                kutu_rengi = (60, 200, 255) 
-                etiket = f"Face {conf:.2f}" 
+                _, kpss = app.det_model.detect(roi, max_num=1, metric="default")
+                lm_list = _landmarks_list(kpss)
 
-                if faces:
-                    for f in faces:
-                        fw = f.bbox[2] - f.bbox[0]
-                        fh = f.bbox[3] - f.bbox[1]
-                        if min(fw, fh) < MIN_FACE_SIZE:
-                            continue
+                # VARSAYILAN: Sari Kutu (Sadece YOLO buldu, landmark / tanima yok)
+                kutu_rengi = (60, 200, 255)
+                etiket = f"Face {conf:.2f}"
 
-                        emb = f.normed_embedding  
-                        name, score = predict_identity(emb)
-                        
-                        if name != "Unknown":
-                            # EŞLEŞME BAŞARILI: Yeşil Kutu
-                            kutu_rengi = (0, 255, 0)
-                            etiket = f"{name} {score:.2f}"
-                        else:
-                            # EŞLEŞME BAŞARISIZ (Yabanci): Kırmızı Kutu
-                            kutu_rengi = (0, 0, 255)
-                            etiket = f"Unknown {score:.2f}"
-                            
-                        break # En net yuzu alip donguden cik
+                if lm_list:
+                    kps = lm_list[0]
+                    aligned_face = face_align.norm_crop(roi, landmark=kps)
+                    emb = app.models["recognition"].get_feat(aligned_face)[0]
+                    emb = emb / np.linalg.norm(emb)
+                    name, score = predict_identity(emb)
+
+                    if name != "Unknown":
+                        kutu_rengi = (0, 255, 0)
+                        etiket = f"{name} {score:.2f}"
+                    else:
+                        kutu_rengi = (0, 0, 255)
+                        etiket = f"Unknown {score:.2f}"
 
                 # Ekrana cizdirme
                 cv2.rectangle(frame, (x1, y1), (x2, y2), kutu_rengi, 2)

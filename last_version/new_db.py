@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import os
 from insightface.app import FaceAnalysis
+from insightface.utils import face_align
 
 # ================= AYARLAR =================
 IMAGE_FOLDER = "db-images" 
@@ -11,6 +12,22 @@ DB_PATH = "known_faces_embeddings.npz"
 print("Yeni veritabani icin 'buffalo_s' yukleniyor...")
 app = FaceAnalysis(name="buffalo_s", root=".", allowed_modules=['detection', 'recognition'])
 app.prepare(ctx_id=-1, det_size=(320, 320))
+
+
+def _landmarks_list(kpss):
+    """det_model.detect kpss ciktisi list veya ndarray olabilir; (5,2) landmark listesine cevir."""
+    if kpss is None:
+        return []
+    if isinstance(kpss, np.ndarray):
+        if kpss.size == 0:
+            return []
+        if kpss.ndim == 2 and kpss.shape == (5, 2):
+            return [kpss]
+        if kpss.ndim == 3 and kpss.shape[1:] == (5, 2):
+            return [kpss[i] for i in range(kpss.shape[0])]
+        return []
+    return [np.asarray(k) for k in kpss] if kpss else []
+
 
 global_embeddings = []
 global_names = []
@@ -51,16 +68,26 @@ for kisi_adi in kisi_klasorleri:
             if img is None:
                 print(f"   [!] HATA: {filename} bozuk veya okunamiyor.")
                 continue
-                
-            faces = app.get(img)
-            if len(faces) > 0:
-                # Resimdeki en buyuk yuzu al
-                face = max(faces, key=lambda f: (f.bbox[2]-f.bbox[0]) * (f.bbox[3]-f.bbox[1]))
-                emb = face.normed_embedding
-                kisi_embeddings.append(emb)
-                print(f"   [+] BAŞARILI: {filename} (Yuz bulundu)")
-            else:
+
+            bboxes, kpss = app.det_model.detect(img, max_num=0, metric="default")
+            lm_list = _landmarks_list(kpss)
+            if not lm_list:
                 print(f"   [-] HATA: {filename} (Yuz bulunamadi)")
+                continue
+
+            b = np.asarray(bboxes)
+            if b.size and b.ndim == 1:
+                b = b.reshape(1, -1)
+            if b.size and b.shape[0] == len(lm_list):
+                areas = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
+                best_i = int(np.argmax(areas))
+            else:
+                best_i = 0
+            aligned = face_align.norm_crop(img, landmark=lm_list[best_i])
+            emb = app.models["recognition"].get_feat(aligned)[0]
+            emb = emb / np.linalg.norm(emb)
+            kisi_embeddings.append(emb)
+            print(f"   [+] BAŞARILI: {filename} (Yuz bulundu)")
                 
     # Kisiye ait tum fotograflar islendi, simdi ortalama (mean) alalim
     if len(kisi_embeddings) > 0:

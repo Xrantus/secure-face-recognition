@@ -46,7 +46,7 @@ class YOLOCalibrationDataReader(CalibrationDataReader):
 
 
 # 1) Kendi egittigin yuz tanima modelini yukle
-model = YOLO("face_yolo11_best.pt")
+model = YOLO("face_yolo11_widerface_best.pt")
 
 # 2) Once normal ONNX (FP32) olarak disa aktar (BOYUT 320 OLARAK SABITLENDI)
 fp32_path = str(model.export(format="onnx", imgsz=320))
@@ -64,7 +64,7 @@ for ext in ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.webp"):
 reader = YOLOCalibrationDataReader(image_paths=image_paths, input_name=input_name, img_size=320, max_samples=64)
 
 # Cikti dosyasinin adi yeni modele uygun olarak degistirildi
-int8_path = "face_yolo11_best_int8.onnx"
+int8_path = "face_yolo11_widerface_best_int8.onnx"
 
 quantize_static(
     model_input=fp32_path,

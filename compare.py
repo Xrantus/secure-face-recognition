@@ -5,8 +5,8 @@ import numpy as np
 
 # ================= AYARLAR =================
 # Eger indirdigin modelin adi farkliysa asagidan degistir
-STANDART_MODEL_PATH = "face_yolo11_best.onnx"
-OZEL_MODEL_PATH = "face_yolo11_best_int8.onnx" 
+STANDART_MODEL_PATH = "face_yolo11_best_int8.onnx"
+OZEL_MODEL_PATH = "face_yolo11_widerface_best_int8.onnx" 
 # ===========================================
 
 print("Modeller hafizaya yukleniyor... Lutfen bekleyin.")
