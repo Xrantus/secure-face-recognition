@@ -19,7 +19,7 @@ MIN_FACE_SIZE = 35              # Minimum yuz boyutu (piksel)
 DET_SIZE = (320, 320)           # InsightFace landmark detector input boyutu
 LANDMARK_PAD = 0.20             # YOLO bbox'i landmark detection icin genisletme orani
 CAM_INDEX = 0
-TFLITE_MODEL_PATH = "face_yolo11_widerface_best_int8.tflite"
+TFLITE_MODEL_PATH = "face_yolo11_widerface_best_int8.onnx"
 # ============================================
 
 
