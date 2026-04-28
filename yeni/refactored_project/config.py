@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-HARDWARE_ENV: Literal["MAC", "RPI"] = "MAC"
+HARDWARE_ENV: Literal["MAC", "RPI", "WIN"] = "MAC"
 
 
 @dataclass(frozen=True)
@@ -49,9 +49,9 @@ class MetricConfig:
 class CameraConfig:
     """Camera/backend configuration (hardware-dependent)."""
 
-    mac_camera_index: int = 0
-    mac_frame_width: int = 1280
-    mac_frame_height: int = 720
+    opencv_camera_index: int = 0
+    opencv_frame_width: int = 1280
+    opencv_frame_height: int = 720
     rpi_preview_size: tuple[int, int] = (640, 480)
 
 

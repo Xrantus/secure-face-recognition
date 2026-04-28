@@ -66,7 +66,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     """Build CLI parser for quick benchmarking/override experiments."""
 
     p = argparse.ArgumentParser(description="Live face recognition (refactored)")
-    p.add_argument("--hardware-env", choices=["MAC", "RPI"], default=config.HARDWARE_ENV)
+    p.add_argument("--hardware-env", choices=["MAC", "RPI", "WIN"], default=config.HARDWARE_ENV)
     p.add_argument("--yolo-model-path", default=config.MODEL_CONFIG.yolo_model_path)
     p.add_argument("--recognizer-model-name", default=config.MODEL_CONFIG.recognizer_model_name)
     p.add_argument("--metric", choices=["cosine", "euclidean"], default=config.METRIC_CONFIG.similarity_metric)
@@ -114,7 +114,7 @@ def resolve_video_path(project_root: Path, video_path: str) -> str:
 
 
 def run_live(
-    hardware_env: Literal["MAC", "RPI"],
+    hardware_env: Literal["MAC", "RPI", "WIN"],
     yolo_model_path: str,
     recognizer_model_name: str,
     metric: SimilarityMetric,
@@ -152,7 +152,7 @@ def run_live(
         _run_video(video_abs, detector, recognizer, db_embs, db_names, metric, threshold)
         return
 
-    if hardware_env == "MAC":
+    if hardware_env in ("MAC", "WIN"):
         _run_mac(detector, recognizer, db_embs, db_names, metric, threshold)
     else:
         _run_rpi(detector, recognizer, db_embs, db_names, metric, threshold)
@@ -182,9 +182,9 @@ def _run_mac(
             with frame_lock:
                 latest_frame = frame
 
-    cap = cv2.VideoCapture(config.CAMERA_CONFIG.mac_camera_index)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, config.CAMERA_CONFIG.mac_frame_width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.CAMERA_CONFIG.mac_frame_height)
+    cap = cv2.VideoCapture(config.CAMERA_CONFIG.opencv_camera_index)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, config.CAMERA_CONFIG.opencv_frame_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.CAMERA_CONFIG.opencv_frame_height)
     if not cap.isOpened():
         raise SystemExit("Mac kamerasi baslatilamadi.")
 

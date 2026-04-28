@@ -10,14 +10,32 @@ Bu klasör, orijinal monolitik kodu **değiştirmeden** (dokunmadan) OOP prensip
 - **RPi (opsiyonel)**:
   - `picamera2` sadece Raspberry Pi tarafında gereklidir.
 
+## Hızlı kurulum (venv)
+
+Repo root’ta (bu README’nin bulunduğu projenin kök dizini):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+pip install -r refactored_project/requirements.txt
+```
+
+Kurulumdan sonra hızlı kontrol:
+
+```bash
+source .venv/bin/activate
+python -c "from refactored_project.face_recognizer import FaceRecognizer; print('ok')"
+```
+
 ## Config seçenekleri (`refactored_project/config.py`)
 
 Bu proje 3 ana config grubuna ayrılmıştır:
 
 ### HARDWARE_ENV (kamera backend)
 
-- `HARDWARE_ENV`: `Literal["MAC", "RPI"]`
-  - Sadece **kamera okuma** backend’ini seçer (Mac: `cv2.VideoCapture`, RPi: `Picamera2`).
+- `HARDWARE_ENV`: `Literal["MAC", "RPI", "WIN"]`
+  - Sadece **kamera okuma** backend’ini seçer (Mac/Windows: `cv2.VideoCapture`, RPi: `Picamera2`).
 
 ### MODEL_CONFIG (model ve inference parametreleri)
 
@@ -49,10 +67,10 @@ Bu proje 3 ana config grubuna ayrılmıştır:
 
 ### CAMERA_CONFIG (donanım detayı)
 
-- Mac:
-  - `CAMERA_CONFIG.mac_camera_index: int` (varsayılan: `0`)
-  - `CAMERA_CONFIG.mac_frame_width: int` (varsayılan: `1280`)
-  - `CAMERA_CONFIG.mac_frame_height: int` (varsayılan: `720`)
+- OpenCV camera (Mac/Windows):
+  - `CAMERA_CONFIG.opencv_camera_index: int` (varsayılan: `0`)
+  - `CAMERA_CONFIG.opencv_frame_width: int` (varsayılan: `1280`)
+  - `CAMERA_CONFIG.opencv_frame_height: int` (varsayılan: `720`)
 - RPi:
   - `CAMERA_CONFIG.rpi_preview_size: tuple[int,int]` (varsayılan: `(640,480)`)
 
@@ -94,6 +112,7 @@ Not: DB create, `config.MODEL_CONFIG.yolo_model_path` ve `config.MODEL_CONFIG.re
 `refactored_project/main.py` şu override seçeneklerini destekler:
 
 - `--hardware-env MAC|RPI`
+- `--hardware-env MAC|RPI|WIN`
 - `--yolo-model-path <path-or-filename>`
   - Dosya adı verirsen `./yolo11-modes/<filename>` altında aranır
 - `--recognizer-model-name buffalo_s` (veya başka InsightFace modeli)
