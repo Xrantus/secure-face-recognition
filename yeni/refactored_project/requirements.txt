@@ -1,0 +1,9 @@
+numpy
+opencv-python
+ultralytics
+insightface
+onnxruntime
+
+# Raspberry Pi only:
+# picamera2
+
