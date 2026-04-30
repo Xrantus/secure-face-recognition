@@ -1,0 +1,62 @@
+# TEZ PROJESI YUZ TANIMA MODELI (YOLO) BENCHMARK SONUCLARI
+Tarih: 30 Nisan 2026
+Test Ortami: PC (CPU Inference - ONNX Runtime)
+Referans Model (Ground Truth): face_yolo11n.onnx (FP32/FP16)
+Test Edilen Model: face_yolo11n_int8.onnx (INT8 Quantized)
+
+---
+
+## VIDEO 1: face-demographics-walking.mp4
+
+==================================================
+                  BENCHMARK SONUCLARI
+==================================================
+  Toplam Gercek Yuz Sayisi (Referans): 503
+  Toplam Tahmin Sayisi (INT8):         514
+  Dogru Tahmin (True Positive):        501
+  Yanlis Tahmin (False Positive):      13
+  Kacirilan Yuz (False Negative):      2
+--------------------------------------------------
+  Precision (Kesinlik): % 97.47
+  Recall (Duyarlilik):  % 99.60
+  F1-Score:             % 98.53
+  mAP@0.5:              % 99.97
+--------------------------------------------------
+                  HIZ KARSILASTIRMASI
+--------------------------------------------------
+  Normal Model Ortalama FPS: 8.1 FPS
+  INT8 Model Ortalama FPS:   8.8 FPS
+  Hiz Artisi:                1.1x Kat Daha Hizli
+==================================================
+
+---
+
+## VIDEO 2: face-demographics-walking-and-pause.mp4
+
+==================================================
+                 BENCHMARK SONUCLARI
+==================================================
+  Toplam Gercek Yuz Sayisi (Referans): 1113
+  Toplam Tahmin Sayisi (INT8):         1125
+  Dogru Tahmin (True Positive):        1109
+  Yanlis Tahmin (False Positive):      16
+  Kacirilan Yuz (False Negative):      4
+--------------------------------------------------
+  Precision (Kesinlik): % 98.58
+  Recall (Duyarlilik):  % 99.64
+  F1-Score:             % 99.11
+  mAP@0.5:              % 99.98
+--------------------------------------------------
+                  HIZ KARSILASTIRMASI
+--------------------------------------------------
+  Normal Model Ortalama FPS: 9.8 FPS
+  INT8 Model Ortalama FPS:   8.8 FPS
+  Hiz Artisi:                0.9x Kat Daha Hizli
+==================================================
+
+---
+
+DEGERLENDIRME:
+- INT8 modeli, Normal (Referans) modele kiyasla ortalama %99 uzerinde Recall ve F1-Score sunarak dogruluk oranindan neredeyse hic odun vermemistir.
+- Gorus alanindaki yuzlerin tespiti konusunda Precision orani her iki testte de oldukca yuksek kalmistir (%97.47 ve %98.58).
+- PC ortamindaki CPU testlerinde hiz kayda deger sekilde artmasa da, INT8'in asil performansi Raspberry Pi gibi sinirli islem gucune sahip mobil donanimlarda ortaya cikacaktir.
