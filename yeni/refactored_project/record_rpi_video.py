@@ -1,14 +1,12 @@
 import argparse
-import cv2
 import time
-import threading
 from pathlib import Path
-from . import config
+import config
 
 def main():
     parser = argparse.ArgumentParser(description="Raspberry Pi Ham Video Kaydedici (Benchmark icin)")
-    parser.add_argument("--output", default="test-videos/rpi_record.avi", help="Kaydedilecek video dosyasinin yolu")
-    parser.add_argument("--fps", type=float, default=15.0, help="Kaydedilecek videonun FPS degeri")
+    parser.add_argument("--output", default="test-videos/rpi_record.h264", help="Kaydedilecek video dosyasinin yolu (.h264 uzantili olmali)")
+    parser.add_argument("--fps", type=float, default=30.0, help="Kaydedilecek videonun FPS degeri")
     parser.add_argument("--duration", type=int, default=0, help="Kayit suresi (saniye). 0 ise sinirsiz (CTRL+C ile durur)")
     args = parser.parse_args()
 
@@ -20,42 +18,33 @@ def main():
 
     try:
         from picamera2 import Picamera2
+        from picamera2.encoders import H264Encoder
+        from picamera2.outputs import FileOutput
     except ImportError:
         raise SystemExit("HATA: Picamera2 modulu bulunamadi! Bu script yalnizca Raspberry Pi uzerinde calisir.")
 
-    print(f"\n[BILGI] Video kaydi baslatiliyor: {output_path}")
+    print(f"\n[BILGI] Donanimsal (H.264) video kaydi baslatiliyor: {output_path}")
     print(f"[BILGI] Ayarlar: {config.CAMERA_CONFIG.rpi_preview_size} @ {args.fps} FPS")
     
     picam = Picamera2()
-    cfg = picam.create_preview_configuration({"size": config.CAMERA_CONFIG.rpi_preview_size})
+    
+    # Video yapilandirmasi olustur
+    # Zoom sorununu cozmek icin: Kameraya once tam genis acidan bakmasini (1640x1232 binned mode), 
+    # ardindan bunu istedigimiz kucuk cozunurluge (640x480) daraltmasini soyluyoruz.
+    cfg = picam.create_video_configuration(
+        main={"size": config.CAMERA_CONFIG.rpi_preview_size},
+        raw={"size": (1640, 1232)} # Cogu Pi kamerasi icin genis acili (Full FoV) okuma modu
+    )
     picam.configure(cfg)
+    
+    # FPS ayarlamasi (set_controls uzerinden guvenli sekilde)
+    picam.set_controls({"FrameRate": args.fps})
     picam.start()
 
-    frame_width, frame_height = config.CAMERA_CONFIG.rpi_preview_size
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter(str(output_path), fourcc, args.fps, (frame_width, frame_height))
-
-    latest_frame = None
-    frame_lock = threading.Lock()
-    running = True
-
-    def reader():
-        nonlocal latest_frame, running
-        while running:
-            try:
-                rgb = picam.capture_array()
-                bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-                with frame_lock:
-                    latest_frame = bgr
-            except Exception:
-                running = False
-                break
-
-    t = threading.Thread(target=reader, daemon=True)
-    t.start()
-
-    while latest_frame is None and running:
-        time.sleep(0.05)
+    # H.264 Encoder (Donanimsal hizlandirmali) ve Cikti ayari
+    # 5000000 = 5 Mbps (1080p ve 720p icin temiz ve kaliteli bir bitrate)
+    encoder = H264Encoder(bitrate=5000000)
+    output = FileOutput(str(output_path))
 
     if args.duration > 0:
         print(f"[BILGI] {args.duration} saniye boyunca kayit yapilacak...")
@@ -63,32 +52,26 @@ def main():
         print("[BILGI] Kayit basladi! Durdurmak icin terminalde CTRL+C yapin.\n")
 
     start_time = time.time()
-    frames_written = 0
-
+    
     try:
-        while running:
+        picam.start_recording(encoder, output)
+        
+        while True:
             # Belirli bir sure verilmis mi kontrol et
             if args.duration > 0 and (time.time() - start_time) >= args.duration:
                 print(f"\n[BILGI] {args.duration} saniyelik sure doldu.")
                 break
-
-            with frame_lock:
-                if latest_frame is None:
-                    continue
-                frame_to_write = latest_frame.copy()
-
-            out.write(frame_to_write)
-            frames_written += 1
-
-            # FPS'ye uymak icin ufak bekleme
-            time.sleep(1.0 / args.fps)
+            # CPU'yu yormamak icin ufak bekleme
+            time.sleep(0.1)
 
     except KeyboardInterrupt:
         print("\n[BILGI] CTRL+C algilandi, kayit durduruluyor...")
     finally:
-        running = False
-        t.join(timeout=1)
-        out.release()
+        # Guvenli sekilde kaydi kapat
+        try:
+            picam.stop_recording()
+        except Exception:
+            pass
         try:
             picam.stop()
         except Exception:
@@ -100,8 +83,7 @@ def main():
     print("-" * 50)
     print(f"  Dosya:          {output_path}")
     print(f"  Toplam Sure:    {actual_duration:.1f} Saniye")
-    print(f"  Toplam Kare:    {frames_written} Kare")
-    print(f"  Ortalama FPS:   {frames_written / actual_duration:.1f} FPS")
+    print(f"  Tahmini FPS:    {args.fps} FPS (Donanimsal Sabit)")
     print("=" * 50)
     print("Simdi bu videoyu benchmark scripti ile test edebilirsiniz:")
     print(f"python -m refactored_project.benchmark_video --video test-videos/{output_path.name}")
