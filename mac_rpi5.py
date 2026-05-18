@@ -15,7 +15,7 @@ from ultralytics import YOLO
 # ========= Tek model (INT8 ONNX) =========
 # Mac uzerinde dilerseniz .pt (PyTorch) modelini de kullanabilirsiniz. 
 # M islemciler MPS (Metal Performance Shaders) ile .pt modellerini cok hizli isler.
-MODEL_PATH = "face_yolo11_widerface_best_int8_OPTIMIZED.onnx"
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "yolo11-modes", "face_yolo11n_int8.onnx")
 
 # RPi5'teki INT8 ayarlari korunmustur. 
 # EGER Mac'te '.pt' modeline gecerseniz YOLO_DET_THRESHOLD = 0.50 yapmayi unutmayin.
