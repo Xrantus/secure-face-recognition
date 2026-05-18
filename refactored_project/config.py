@@ -11,8 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
-
-HARDWARE_ENV: Literal["MAC", "RPI", "WIN"] = "MAC"
+HARDWARE_ENV: Literal["MAC", "RPI", "WIN"] = "RPI"
 
 
 @dataclass(frozen=True)
