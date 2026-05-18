@@ -6,7 +6,7 @@ Kamerayi acip beklememek adina gelistirme (development) asamasinda kolaylik sagl
 """
 
 import time
-from backend_client import fetch_and_save_embeddings, send_access_log, sync_offline_logs, _save_log_offline
+from .backend_client import fetch_and_save_embeddings, send_access_log, sync_offline_logs, _save_log_offline
 
 def run_tests():
     print("=== BACKEND ILETISIM TESTI BASLIYOR ===\n")
