@@ -39,8 +39,20 @@ def run_tests():
     print("Aciklama: Internetin kopuk oldugu senaryo simule ediliyor...")
     
     # Sistemi kandirmak icin manuel olarak iki adet offline log ekliyoruz
-    _save_log_offline({"personnelId": "Mehmet-Offline", "accessTime": "2026-05-18T12:00:00"})
-    _save_log_offline({"personnelId": "Ayse-Offline", "accessTime": "2026-05-18T12:05:00"})
+    _save_log_offline({
+        "userId": None, 
+        "accessType": "AUTHORIZED", 
+        "details": "Offline Test Mehmet",
+        "deviceId": "RPI_TEST",
+        "accessTime": "2026-05-18T12:00:00"
+    })
+    _save_log_offline({
+        "userId": None, 
+        "accessType": "AUTHORIZED", 
+        "details": "Offline Test Ayse",
+        "deviceId": "RPI_TEST",
+        "accessTime": "2026-05-18T12:05:00"
+    })
     
     print("-> 2 adet sahte cevrimdisi (offline) log olusturuldu.")
     print("-> Simdi internetin geri geldigi varsayilip toplu yollama deneniyor...")
