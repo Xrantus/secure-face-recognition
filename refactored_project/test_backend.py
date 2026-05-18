@@ -8,7 +8,14 @@ Kamerayi acip beklememek adina gelistirme (development) asamasinda kolaylik sagl
 import time
 from .backend_client import fetch_and_save_embeddings, send_access_log, sync_offline_logs, _save_log_offline
 
+import os
+from .backend_client import fetch_and_save_embeddings, send_access_log, sync_offline_logs, _save_log_offline, OFFLINE_LOGS_FILE
+
 def run_tests():
+    # Eski hatali testlerden kalan dosyalari temizle
+    if os.path.exists(OFFLINE_LOGS_FILE):
+        os.remove(OFFLINE_LOGS_FILE)
+
     print("=== BACKEND ILETISIM TESTI BASLIYOR ===\n")
     
     # Test 1: Yuz Vektoru Cekme (GET /api/embedding/all-active)
