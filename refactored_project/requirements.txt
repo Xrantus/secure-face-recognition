@@ -4,6 +4,11 @@ ultralytics
 insightface
 onnxruntime
 
+# Web sunucusu (API) için gerekli kütüphaneler
+fastapi
+uvicorn
+python-multipart
+requests
+
 # Raspberry Pi only:
 # picamera2
-
