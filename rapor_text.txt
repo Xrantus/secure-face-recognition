@@ -1,0 +1,954 @@
+  
+ 
+  
+  
+ 
+ 
+ROBUST FACE RECOGNITION FOR 
+SURVEILLANCE CAMERAS 
+ 
+ 
+TERM REPORT 
+CENG415 SENIOR DESIGN PROJECT AND SEMINAR 1 
+(Sectoral) 
+ 
+ 
+ 
+Team Members: 
+Buket Yavuz 290201054 
+Ahmet Kerem Şaylı 290201035 
+Nedret Çiftçi 290201002 
+ 
+ 
+Advisor: Dr. Altuğ Yiğit 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+BACHELOR OF SCIENCE 
+Computer Engineering Department 
+İzmir Institute of Technology, İzmir, Turkey 
+ 
+ 
+ 
+DECEMBER 2025 
+ 
+ 
+ 2 
+  
+ CENG 415 SENIOR DESIGN PROJECT AND SEMINAR I 
+TERM REPORT (SECTORAL)  
+ 
+ 
+Project Title: ROBUST FACE RECOGNITION FOR SURVEILLANCE CAMERAS 
+Team Members: Buket Yavuz 290201054, Ahmet Kerem Şaylı 290201035, Nedret Çiftçi 290201002 
+Thesis Advisor: Altuğ Yiğit  
+ 
+ 
+ABSTRACT  
+ 
+Access control and security are fundamental requirements for modern organizations, yet traditional authentication 
+mechanisms pose a critical threat to data security, as they remain vulnerable to loss, theft, and unauthorized 
+duplication. The primary purpose of this project is to address these deficiencies by developing a robust, contactless, 
+and offline-capable facial recognition system designed for fully local real-time surveillance and secure access 
+management. 
+ 
+To achieve this objective, the project methodology employs a distributed edge-server architecture that integrates 
+deep learning algorithms within a fully local network environment. Unlike conventional cloud-dependent systems 
+that suffer from high latency and external connectivity reliance, this solution offloads critical image processing tasks 
+to autonomous embedded edge units. The system utilizes state-of-the-art models for face detection and high-
+dimensional feature extraction (embedding generation) at the edge, while cosine similarity metrics are performed 
+on a local backend server for precise identity verification. A rigorous data integrity pipeline is implemented, 
+incorporating automatic Face Image Quality Assessment (FIQA) to filter unsuitable images during enrollment, 
+ensuring that only high-quality data enters the recognition database. 
+ 
+From a project management and system design perspective, the solution is structured into three cohesive layers: 
+a mobile interface for administrative workflows and real-time alerts, a backend server for logic and database 
+management, and edge nodes for continuous video analysis. This modular approach facilitates scalable 
+deployment and efficient maintenance. The system includes comprehensive administrative controls, such as 
+whitelist/blacklist management and audit logging, to create a fully verifiable security environment. 
+ 
+The widespread impact of this work lies in its ability to democratize high-security surveillance by keeping the data 
+in local. By successfully balancing computational efficiency with recognition accuracy, the proposed system offers 
+a scalable, low-latency alternative to expensive commercial solutions. It significantly enhances operational 
+efficiency for residential and commercial facilities by automating entry logs and providing immediate notifications 
+for unauthorized access attempts, thereby eliminating human error in security protocols. 
+ 
+Keywords:  Face Recognition, Edge Computing, Access Control, Deep Learning, Real-time Surveillance. 
+ 
+ 
+1. PROJECT PURPOSE, INNOVATIVE ASPECTS AND TECHNOLOGICAL VALUE  
+ 
+1.1. Purpose of the Project 
+ 
+Existing access control infrastructures primarily rely on physical tokens -such as ID cards and key fobs- or manual 
+verification processes. However, industry research indicates that these methods are inherently prone to operational 
+risks. According to recent security reports, a significant percentage of security breaches originate from lost or stolen 
+credentials, highlighting the vulnerability of token-based authentication [26]. Physical cards are easily duplicated, 
+and traditional systems often fail to prevent "tailgating" which is a common security violation where unauthorized 
+individuals gain access by following authorized personnel through a secure door  [27]. 
+ 
+Beyond these vulnerabilities, traditional systems function as passive recording tools rather than active security 
+agents, lacking the real-time responsiveness required to mitigate threats as they occur. The primary purpose of this 
+project is to eliminate these dependencies and security gaps by developing a "Robust Face Recognition for 
+Surveillance Cameras" system an intelligent solution that transforms standard video feeds into automated, 
+contactless access control mechanisms. 
+ 
+The concrete goals of this project are: 
+ To eliminate physical dependencies: Replacing physical keys and cards with biometric facial embeddings. 
+As noted in biometric security studies, physiological characteristics provide a higher level of non-
+repudiation compared to possession-based tokens, preventing unauthorized access due to lost, stolen, or 
+shared credentials [28]. 
+ 
+ 
+ 3 
+  
+  
+ To reduce system latency:  Implementing a distributed edge-computing architecture  using Raspberry 
+Pi devices to perform local face detection and feature extraction, thereby minimizing network bandwidth 
+usage and ensuring rapid response times. 
+ 
+ To ensure data integrity:  Establishing a comprehensive operational workflow that includes automatic 
+image quality checks (FIQA) and strict administrative approval mechanisms (Whitelist/Blacklist) to prevent 
+poor-quality data from compromising the system. 
+ 
+ To provide scalable surveillance:  creating a system capable of 1:N identification (one-to-many 
+searching) across multiple access points, scalable to millions of embeddings using modern vector 
+database technologies. 
+ 
+1.2 Innovative Aspects and Technological Value 
+    
+The proposed project distinguishes itself from existing solutions through its Edge Architecture  and comprehensive 
+End-to-End Surveillance Pipeline . While traditional systems often rely on external cloud processing or raw 
+algorithms, our innovation lies in bridging the gap between high-accuracy deep learning models and practical, 
+privacy-centric operational requirements within a local network. 
+ 
+The innovative aspects and technological superiority of the project are detailed below in comparison with similar 
+national and international systems: 
+ 
+1.2.1. Comparison with Academic Literature (FaceNet & ArcFace):  While state-of-the-art algorithms like 
+FaceNet [1] and ArcFace [2] focus primarily on embedding accuracy, they often lack the necessary operational 
+frameworks for real-world deployment. 
+ 
+ Our Innovation:  We extend these algorithms by integrating an Automatic Quality Assurance (FIQA) layer, 
+utilizing approaches similar to FaceQnet [4]. Unlike raw implementations, our system filters unsuitable 
+images (blur, poor lighting, occlusion) before processing, ensuring high data integrity. Furthermore, we 
+wrap the recognition engine in a managed workflow with whitelist/blacklist authorization, transforming a 
+raw algorithm into a usable security product. 
+ 
+1.2.2. Comparison with Commercial Mobile Applications:  Commercial solutions, such as FaceIntel Access 
+Control [21] or Kisi Mobile Access [25], typically depend heavily on continuous internet connectivity and external 
+servers for processing. This reliance introduces latency, privacy concerns regarding biometric data storage, and 
+vulnerability to network failures. 
+ 
+ Our Innovation (Edge Computing):  Our system introduces a distributed architecture based on Edge 
+Computing principles [8] [16] , where the Edge Node (Raspberry Pi) performs local face detection and 
+embedding generation. 
+ 
+ By processing video frames at the edge and transmitting only vector data (embeddings) to the local 
+backend, we eliminate the need for cloud dependency. This decentralized architecture minimizes 
+bandwidth usage and ensures rapid response times within the local environment, allowing the system to 
+operate securely in a completely offline setting. 
+ 
+1.2.3. Comparison with Authentication Systems:  Most market-available applications, like BioID [22], focus 
+primarily on 1:1 user authentication (verifying a claimed identity for a specific login attempt). 
+ 
+ Our Innovation (1:N Surveillance):  Leveraging advanced frameworks like InsightFace [11] and 
+RetinaFace [12], our system is engineered for 1:N identification. It is capable of scanning a live video 
+stream to identify "Unknown" or "Restricted" individuals without active user interaction. Unlike 
+authentication apps that provide simple grant/deny decisions, our system offers a categorized response 
+mechanism (Authorized, Restricted, Unknown) that triggers real-time push notifications to security 
+personnel. 
+ 
+Technological Output:  The final product delivers a scalable, privacy-compliant security ecosystem supporting both 
+Relational and Vector databases, capable of managing high-dimensional data efficiently for continuous surveillance 
+operations completely offline. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 4 
+  
+ 1.2.4. Robustness through Multi-Perspective Analysis  
+Traditional face recognition systems often fail when presented with non-frontal faces or varying angles, as single-
+image accuracy degrades significantly under unconstrained poses. 
+ 
+ Our Innovation (Multi-Frame Processing):  To ensure robustness during real-time surveillance , our 
+system does not rely on a single static snapshot. Instead, it processes a continuous video stream, 
+capturing facial features from multiple perspectives  as the subject moves through the camera's field of 
+view. By analyzing consecutive frames, the system selects the optimal angles to match against the stored 
+references. This approach leverages the temporal information inherent in video sequences, as highlighted 
+in Wang et al. [29] , to significantly reduce false negatives caused by momentary pose variations or 
+occlusions. 
+ 
+Table 1. Comparison of the Proposed System with Existing Solutions 
+Aspect Academic Algorithms 
+(FaceNet, ArcFace)  Commercial Cloud 
+Systems  Proposed System (This 
+Project) 
+Primary Purpose  High accuracy embedding 
+research Access control & 
+Authentication Continuous 1:N Surveillance & 
+Security 
+Data Processing  Static Image Processing 
+(Single Frame) Cloud-based Processing Multi-Perspective / Multi-
+Frame Analysis 
+Architecture  Offline / Dataset-based Centralized Cloud Server Distributed Edge Architecture 
+Privacy & Storage  Not applicable (Research 
+focus) Third-party Cloud 
+Storage (Privacy Risk) Local Network / Self-Hosted 
+(Privacy Preserving) 
+Connectivity  N/A High Internet 
+Dependency Fully Functioning Offline Mode 
+Hardware  High-end GPU Servers Remote Servers Low-Cost Edge Node 
+(Raspberry Pi) 
+ 
+ 
+METHODOLOGY  
+ 
+This project implements a robust facial recognition system for surveillance by integrating deep learning algorithms, 
+embedded edge computing, and a mobile application interface. The methodology follows a multi-tiered pipeline that 
+encompasses data collection, feature extraction, classification, and real-time notification. The system utilizes the 
+InsightFace library for generating high-dimensional facial embeddings and employs Cosine Similarity metrics for 
+identity verification. To ensure efficient processing, the solution leverages YOLO v11 for person detection and 
+classifiers for facial localization, distributed across edge devices and backend servers. 
+ 
+2.1 System architecture and design (WP#1-2-3-4) 
+ 
+The system design goes beyond a standalone mobile application; it is a distributed architecture where mobile 
+interfaces, backend servers, and embedded edge devices communicate continuously to execute the security 
+pipeline. To clarify the interactions between these components and the human operators, the system actors and 
+their specific privileges are defined below, followed by an explanation of the operational pipeline. 
+ 
+2.1.1 Operational Pipeline and Component Interaction 
+ 
+The use cases presented in this section rely on a synchronized pipeline that connects the edge, backend, and 
+mobile layers. The interaction flow is designed to minimize latency and ensure data consistency: 
+ 
+ Edge Processing (Data Acquisition):  The operational pipeline begins at the embedded edge device 
+(Raspberry Pi), which utilizes threaded frame capture to optimize performance. The device performs local 
+face detection and generates embeddings using the deployed deep learning models, significantly reducing 
+bandwidth usage by sending only vector data rather than raw video streams. 
+ 
+ Backend Verification (Analysis):  The backend receives the facial embeddings and compares them 
+against stored references in the database using Cosine Similarity calculations. Based on adjustable 
+thresholds, the system classifies the detected individual as "Authorized," "Restricted," or "Unknown". 
+ 
+ Mobile Synchronization (Action):  The results are pushed to the mobile application via secure API 
+endpoints. If a security threat or unknown face is detected, the pipeline triggers an immediate push 
+notification to the Admin, closing the loop between the autonomous edge detection and human decision-
+making. 
+  
+ 
+ 
+ 5 
+  
+ 2.1.2 System Actors and Privileges 
+ 
+The system implements Role-Based Access Control (RBAC) to manage security and operational workflows. The 
+defined actors and their respective privileges are as follows: 
+ 
+ Admin: The primary overseer of the system with full access privileges. 
+o Privileges:  The Admin is responsible for reviewing and approving pending user registration 
+requests and assigning them to the Whitelist or Blacklist. They have the authority to view the full 
+security dashboard, monitor device status, delete users from lists, and review detailed security 
+activity logs. Additionally, the Admin receives and manages real-time security alerts for unknown 
+or blacklisted detections. 
+ 
+ Manager:  An administrative role with supervisory responsibility over a specific subset of users. 
+o Privileges:  The Manager has access to a dedicated dashboard that displays statistics and recent 
+activity specifically related to the users under their supervision ("My Users"), rather than the entire 
+database. 
+ 
+ User: The end-user who requires access to the facility. 
+o Privileges:  The User interacts with the mobile application to register their identity. They are 
+authorized to upload profile information and capture the required facial angles (Center, Left, 
+Right) for system enrollment. They can also log in to view their profile status. 
+ 
+ Edge Node (Actor):  The autonomous component deployed on the Raspberry Pi at the physical access 
+points. 
+o Privileges:  Unlike human actors, the Edge Node operates continuously as a system agent. It 
+has the authority to capture video streams, execute local deep learning models for face detection 
+and feature extraction, and initiate secure verification requests to the backend server. It acts as 
+the bridge between the physical environment and the central database. 
+ 
+ 
+  
+ 
+ 
+ 6 
+  
+ 2.1.3 Use Case Specifications 
+ 
+The visual representation of the interactions between the system actors and the functional requirements is illustrated 
+in the Use Case Diagram below. For comprehensive details regarding each use case scenario, please refer to the 
+Appendix  
+ 
+  
+
+ 
+ 
+ 7 
+  
+ 2.2 Overview (WP#2-3) 
+ 
+ 
+ 
+2.3 Dataset selection and preparation(WP#3-5-6) 
+ 
+For the experimental evaluation of the system, the VGGFace2 [23] dataset was selected due to its extensive intra-
+class variations in pose, illumination, and age, which are critical for simulating real-world surveillance conditions. 
+To construct the facial recognition database (enrollment), a subset of 150 distinct identities was utilized. Unlike 
+controlled environments that rely on specific facial angles, images were selected randomly for each identity to test 
+the system's robustness against unconstrained inputs. The system's 1:N identification performance was 
+subsequently validated using a train group consisting of 50 individuals from this enrolled dataset. 
+ 
+ 
+2.4 Detection Algorithm and Model Architecture (WP#6) 
+The core of the facial recognition system is built upon a multi-stage deep learning pipeline leveraging the 
+InsightFace framework [11] , which prioritizes inference efficiency for real-time surveillance. The pipeline consists 
+of the following synchronized stages: 
+1. Face Detection and Alignment:  The process begins with YOLOv11 for efficient person detection to filter 
+irrelevant frames. Subsequently, the system utilizes the RetinaFace algorithm [12] (embedded within the 
+buffalo_l model pack) to precisely locate faces and landmarks. To optimize performance for edge 
+processing, the input resolution is dynamically constrained (e.g., det_size=640x640), significantly reducing 
+the computational load per frame. 
+
+ 
+ 
+ 8 
+  
+  
+2. Face Image Quality Assessment (FIQA):  Before feature extraction, a quality control layer evaluates the 
+aligned face images. As extensively categorized in the fundamental survey by Schlett et al. [30] ensuring 
+high biometric utility is critical for reliable recognition. Accordingly, inputs that fall below a predefined quality 
+threshold due to motion blur, extreme angles, or poor lighting are automatically discarded. This ensures 
+that only high-fidelity data enters the recognition engine, minimizing false prediction rates. 
+ 
+3. Feature Extraction:  High-quality aligned face images are then processed by an ArcFace model [2] (based 
+on a ResNet backbone). This model maps the facial features into a 512-dimensional vector space, similar 
+to techniques discussed in [1] and [13]. As demonstrated in the system's verification modules, the resulting 
+embeddings are normalized to ensure that the magnitude does not affect the comparison. 
+ 
+4. Metric Learning and Optimization:  Instead of training from scratch, the system employs robust pre-
+trained models optimized via ONNX Runtime, allowing for hardware-accelerated inference on the edge 
+device. Identity verification is performed using Cosine Similarity logic [17] (np.dot), where normalized 
+feature vectors are compared against the enrolled database. A similarity threshold is enforced to rigorously 
+distinguish between "Authorized" personnel and "Unknown" individuals.  
+ 
+2.5 Embedded implementation and integration (WP#5-6-7) 
+ 
+The physical deployment of the system relies on the Raspberry Pi 5 as the central edge processing unit. Selected 
+for its superior performance in AI workloads, the device features a Broadcom BCM2712 Quad-core Arm Cortex-
+A76 processor clocked at 2.4GHz and VideoCore VII GPU. This architecture provides the necessary computational 
+throughput to run quantized deep learning models (YOLO11n and ArcFace) with minimal latency, significantly 
+outperforming previous generations in vector processing tasks. 
+ 
+Video acquisition is handled via the Camera Serial Interface (CSI) rather than standard USB connections to ensure 
+high-bandwidth, low-latency streaming directly to the GPU memory. 
+To optimize power consumption and prevent thermal throttling during idle periods, the system integrates an HC-
+SR04 Ultrasonic Distance Sensor as a hardware trigger. The sensor operates on the sonar principle, emitting a 
+40kHz ultrasonic pulse and measuring the time-of-flight for the echo to return. The distance to the subject is 
+calculated using the formula: 
+𝐷𝑖𝑠𝑡𝑎𝑛𝑐𝑒 =𝑇𝑖𝑚𝑒 ×𝑆𝑝𝑒𝑒𝑑 𝑜𝑓 𝑆𝑜𝑢𝑛𝑑
+2 
+ 
+The high-performance AI pipeline is activated only when the sensor detects a subject within a predefined proximity 
+threshold. This sensor-based logic ensures that the heavy processing load is suspended when no user is present, 
+maintaining hardware stability and extending operational lifespan. 
+ 
+2.6 Performance Evaluation (WP#8-9) 
+The performance evaluation of the system was conducted in two distinct phases: determining the optimal object 
+detection model for edge deployment and validating the accuracy of the facial recognition pipeline using the 
+VGGFace2 dataset. 
+ 
+2.6.1 Person Detection Model Selection 
+To identify the most suitable model for the embedded system, a comparative analysis was conducted among the 
+nano versions of YOLO architectures (v8, v10, 11, and 12). While YOLOv8n achieved the highest average speed 
+(21.39 FPS), it exhibited stability issues with significant frame rate drops. Consequently, YOLO11n  was selected 
+as the core algorithm; it offered the optimal balance between stability and accuracy, demonstrating the highest 
+minimum frame rate (12.20 FPS) and superior detection sensitivity with an average of 14.05 objects per frame. 
+ 
+Table 2: Comparative Analysis of YOLO Nano Architectures  
+Model Avg. FPS 
+(Speed) Min FPS 
+(Stability)  Max 
+FPS Avg. Objects per Frame 
+(Accuracy)  Total Objects 
+Detected  
+YOLOv8n  21.39 8.62 24.24 13.20 25,511 
+YOLOv10n  19.79 9.92 21.67 9.90 19,121 
+YOLO11n  19.02 12.20 21.26 14.05 27,145 
+YOLO12n  14.98 9.05 16.59 13.52 26,125 
+ 
+2.6.2 Face Recognition Accuracy Analysis 
+Following the detection stage, the verification performance of the InsightFace (RetinaFace + ArcFace) pipeline was 
+evaluated. The test was conducted on a CPU environment using a randomly sampled subset of the VGGFace2 
+dataset, consisting of 400 test cases  (100 positive/authorized samples and 300 negative/impostor samples). 
+The confusion matrix derived from the test results ( TP: 92, TN: 291, FP: 9, FN: 8 ) indicates a successful 
+implementation with expected variance due to environmental factors. The slight drop in precision compared to 
+theoretical benchmarks is attributed to the unconstrained nature of the test dataset (e.g., varying poses and lighting). 
+ 
+ 
+ 9 
+  
+ The calculated performance metrics are detailed below: 
+ 
+Table 3: Face Recognition Performance Metrics  
+Metric Value Definition & Analysis  
+Accuracy 95.75% The overall ratio of correctly classified samples. The system correctly processed 383 
+out of 400 cases, proving its stability for general surveillance tasks. 
+Precision 91.09% (TP / (TP + FP)) - Indicates the reliability of positive identifications. The ~9% False 
+Positive rate (9 cases) suggests that under lower confidence thresholds, the system 
+may occasionally misclassify individuals with strong facial similarities. 
+Recall 92.00% (TP / (TP + FN)) - The system successfully identified 92 out of 100 authorized attempts. 
+The 8% miss rate is within expected limits for a CPU-based inference setup dealing 
+with non-frontal face angles. 
+F1-Score 91.54% The harmonic mean of Precision and Recall. A score exceeding 90% confirms that the 
+model is robust, maintaining a healthy balance between security and user accessibility 
+without overfitting. 
+ 
+2.6.3 Deployment Considerations and Expected Trade-offs 
+The performance metrics presented above establish the baseline accuracy of the system in an unconstrained 
+computational environment. However, the final deployment on the Raspberry Pi edge node requires specific 
+optimizations to ensure real-time responsiveness. 
+ 
+ Quantization Impact:  The transition from 32-bit floating-point (FP32) arithmetic to half-precision (FP16) 
+or integer (INT8) quantization via ONNX Runtime is expected to significantly reduce latency. While this 
+compression is essential for the embedded CPU, it may result in a marginal reduction in recognition 
+accuracy (estimated < 1-2%). 
+ Optimization Strategy:  The project prioritizes high Precision (avoiding false positives) over Recall. 
+Therefore, the optimization thresholds will be tuned to maintain security integrity, even if it requires the 
+user to face the camera more directly during the edge operation.  
+ 
+ 
+3  PROJECT MANAGEMENT 
+ 
+3.1 Work Package Timetable 
+WORK PACKAGE TIMETABLE  
+WP No Work Package Name  
+Start-End Date  Contributors 
+1 Preliminary Preparation and Requirement Analysis October – November All Team Members 
+2 System Architecture November  -  December All Team Members 
+3 Database Design November  -  December All Team Members 
+4 Mobile Application and Interface Development November  -  January All Team Members 
+5 Backend Development December - February All Team Members 
+6 AI Core Development December - February All Team Members 
+7 Embedded System (Edge) Development February - March All Team Members 
+8 System Integration and Testing March - April All Team Members 
+9 Finalization, Documentation, and Demo April - May All Team Members 
+ 
+ 
+ 10 
+  
+        
+  
+ 
+ 
+ 11 
+  
+ 3.3 Work Packages  
+ 
+The WP Table below is prepared separately for each WP. The table can be extended according to the number of 
+WPs. 
+ 
+                                                      WORK PACKAGE #1 
+WP Name: Preliminary Preparation and Requirement Analysis 
+WP Objective: Establishing the theoretical infrastructure, defining hardware requirements, and finalizing the 
+project management plan. 
+WP Tasks 
+ 
+1.1 Conducting literature review and competitor 
+analysis. 
+1.2 Documenting the system flow scenarios (Use-
+Cases)  
+1.3 Selecting and acquiring Raspberry Pi hardware, 
+camera modules, and development environments. 
+1.4 Setting up the GitHub repository and creating 
+the project management schedule. Responsible People 
+ 
+1.1 All Team Members 
+1.2 Nedret Çiftçi 
+1.3 All Team Members 
+1.4 Ahmet Kerem Şaylı 
+ 
+Success Criteria: The project proposal is officially approved by the advisor, all necessary hardware 
+components are acquired, and the GitHub repository is fully initialized with the project management 
+schedule in place.  
+ 
+                                                      WORK PACKAGE #2 
+WP Name: System Architecture  
+WP Objective: Designing data structures, deciding on vector search strategies for facial data, and finalizing 
+communication protocols for Mobile, Backend, and Embedded systems. 
+WP Tasks 
+ 
+2.1 Drafting the Detailed System Architecture 
+Document and data flow diagrams. 
+2.2 Defining RESTful API endpoints and JSON data 
+payloads for system communication. 
+2.3 Defining the Edge synchronization logic and 
+System Actors/Privileges (RBAC). Responsible People 
+ 
+2.1 Buket Yavuz 
+2.2 Ahmet Kerem Şaylı 
+2.3 Nedret Çiftçi 
+Success Criteria: A comprehensive System Architecture Document is completed, detailing the data flow 
+between Edge and Mobile layers, and all RESTful API endpoints are fully defined with finalized JSON 
+payloads.  
+ 
+                                                      WORK PACKAGE #3 
+WP Name: Database Design 
+WP Objective: Designing data structures and defining vector search strategies for facial data. 
+WP Tasks 
+ 
+3.1 Designing the Relational Database Schema (ER 
+Diagrams) for user data.  
+3.2 Defining the Vector Indexing strategy for high-
+speed face embedding search. 
+3.3 Establishing database constraints to ensure 
+data integrity. Responsible People 
+ 
+3.1 Ahmet Kerem Şaylı  
+3.2 Buket Yavuz 
+3.3 Nedret Çiftçi  
+Success Criteria: The relational database schema is finalized to handle user metadata, and the vector 
+indexing strategy is validated to support efficient high-dimensional facial embedding searches.  
+ 
+ 
+ 
+ 12 
+  
+                                                       WORK PACKAGE #4 
+WP Name: Mobile Application and Interface Development 
+WP Objective: Developing end-user registration interfaces and administrative audit mechanisms. 
+WP Tasks 
+ 
+4.1 Creating UI/UX mockups for the Mobile 
+Application. 
+4.2 Coding the User Registration and photograph 
+upload screens. 
+4.3 Developing the Admin Dashboard for 
+Whitelist/Blacklist management. 
+4.4 Creating reporting screens to view historical 
+access logs. Responsible People 
+ 
+4.1 Nedret Çiftçi 
+4.2 Ahmet Kerem Şaylı 
+4.3 Ahmet Kerem Şaylı 
+4.4 Buket Yavuz 
+Success Criteria: The mobile application is fully functional, capable of registering new users via 3-angle 
+photo uploads, and the Admin Dashboard successfully manages Whitelist/Blacklist status and displays 
+access logs.  
+ 
+                                                      WORK PACKAGE #5 
+WP Name: Backend Development 
+WP Objective: Developing server-side logic and managing data traffic between clients. 
+WP Tasks 
+ 
+5.1 Setting up the Backend server and database 
+connections. 
+5.2 Developing API services to handle data 
+requests from embedded devices and mobile apps. 
+5.3 Implementing Authentication and Authorization 
+services. 
+5.4 Integrating the real-time Push Notification 
+infrastructure. Responsible People 
+ 
+5.1 Buket Yavuz   
+5.2 Buket Yavuz 
+5.3 Nedret Çiftçi   
+5.4 Ahmet Kerem Şaylı 
+Success Criteria: The backend server successfully handles API requests from edge devices with low 
+latency, manages secure authentication, and reliably triggers real-time push notifications to the mobile 
+application upon security events.  
+ 
+ 
+                                                      WORK PACKAGE #6 
+WP Name: AI Core Development 
+WP Objective: Developing quality control (FIQA) algorithms and matching mechanisms. 
+WP Tasks 
+ 
+6.1 Integrating the FIQA (Face Image Quality 
+Assessment) algorithm to filter unsuitable images. 
+6.2 Coding the vector matching logic and Cosine 
+Similarity calculations. 
+6.3 Optimizing classification thresholds for 
+"Authorized," "Restricted," or "Unknown" status. 
+6.4 Implementing "Liveness Detection" algorithms 
+to prevent presentation attacks. Responsible People 
+ 
+6.1 Buket Yavuz   
+6.2 Buket Yavuz 
+6.3 Nedret Çiftçi   
+6.4 Ahmet Kerem Şaylı 
+Success Criteria: The FIQA module automatically rejects low-quality images (blur/occlusion) during 
+enrollment, and the vector matching logic achieves the targeted accuracy rate for distinguishing between 
+"Authorized" and "Unknown" individuals, verified via Unit Tests.  
+ 
+ 
+ 
+ 13 
+  
+                                                       WORK PACKAGE #7 
+WP Name: Embedded System (Edge) Development 
+WP Objective: Enabling real-time object detection and feature extraction on the embedded hardware. 
+WP Tasks 
+ 
+7.1 Setting up the embedded operating system and 
+integrating the camera sensors. 
+7.2 Optimizing the person detection algorithms 
+(e.g., YOLO) for the edge device. 
+7.3 Implementing the face feature extraction logic 
+on the embedded system. 
+7.4 Optimizing the image capture pipeline and 
+thermal management for real-time performance. Responsible People 
+ 
+7.1 Ahmet Kerem Şaylı  
+7.2 Buket Yavuz 
+7.3 Ahmet Kerem Şaylı  
+7.4 Nedret Çiftçi   
+Success Criteria: The embedded device runs the object detection model at a stable frame rate sufficient 
+for real-time surveillance, maintains thermal stability, and successfully generates and transmits feature 
+vectors to the backend without sending raw video streams.  
+ 
+ 
+ 
+                                                      WORK PACKAGE #8 
+WP Name: System Integration and Testing 
+WP Objective: Combining all modules and performing End-to-End testing. 
+WP Tasks 
+ 
+8.1 Executing the full integration of mobile, 
+backend, and embedded components.  
+8.2 Conducting accuracy and reliability tests under 
+different environmental scenarios. 
+8.3 Performing latency and system load tests to 
+verify responsiveness. 
+ Responsible People 
+ 
+8.1 Nedret Çiftçi  
+8.2 Buket Yavuz 
+8.3 Ahmet Kerem Şaylı  
+Success Criteria: The complete end-to-end pipeline functions seamlessly without critical errors, and the 
+system passes all stress tests regarding network latency and load handling under varying environmental 
+conditions.  
+ 
+ 
+                                                      WORK PACKAGE #9 
+WP Name: Finalization, Documentation, and Demo 
+WP Objective: Completing the project report and preparing the live demo. 
+WP Tasks 
+ 
+9.1 Bug fixing and final optimization based on test 
+results. 
+9.2 Writing the Final Report in the required 
+academic format. 
+9.3 Preparing the live demo scenario and 
+rehearsing for the jury presentation. Responsible People 
+ 
+9.1 All Team Members  
+9.2 All Team Members  
+9.3 All Team Members  
+Success Criteria: The Final Report is submitted in the required academic format, and the live demo 
+successfully illustrates the full "Enrollment to Alert" scenario to the jury.  
+ 
+ 
+ 
+ 14 
+  
+ 2.4 Risk Analysis 
+RİSK MANAGEMENT TABLE 
+ 
+WP No Risk Definition Precautions (Plan B) 
+7 Thermal Throttling and Hardware 
+Limitations: The Raspberry Pi may 
+experience overheating and performance 
+degradation (low FPS) due to the high 
+computational load of running detection 
+(YOLO) and extraction models 
+simultaneously. Plan B: Implementing active cooling solutions 
+(heatsinks/fans) to mitigate thermal throttling. 
+Motion-based triggering logic will be optimized to 
+ensure that the HC-SR04 sensor is activated only 
+when necessary and remains inactive otherwise, 
+minimizing unnecessary CPU and GPIO usage. If 
+thermal or performance issues persist, the system 
+architecture will be modified to offload 
+computationally intensive feature extraction tasks to 
+a backend server, using the edge device solely for 
+face detection, motion detection, distance sensing 
+upon trigger, and frame capture. 
+6,7 Suboptimal Environmental Conditions: 
+Recognition accuracy may drop 
+significantly due to poor lighting, motion 
+blur, or partial occlusions (e.g., masks, 
+glasses) in the surveillance area. Plan B: Integrating image preprocessing techniques 
+(e.g., Gamma correction, Histogram equalization) 
+before model inference. Alternatively, upgrading the 
+camera module to a sensor with higher dynamic 
+range or low-light sensitivity. 
+7,8 Network Connectivity Loss: A disruption in 
+the connection between the Edge Node 
+and the Backend Server could prevent 
+real-time verification and data logging. Plan B: Leveraging the system's "offline operation 
+capabilities". Access logs and embeddings will be 
+cached locally on the Edge device and automatically 
+batch-synchronized with the server once 
+connectivity is restored. 
+6 Presentation Attacks (Spoofing): 
+Unauthorized users may attempt to bypass 
+the system using high-resolution 
+photographs or videos of authorized 
+personnel. Plan B: Integrating a "Liveness Detection" algorithm 
+[7] [19] (e.g., blink detection or texture analysis) into 
+the pipeline. Additionally, increasing the Cosine 
+Similarity threshold to enforce stricter matching 
+criteria during verification. 
+3, 5 Data Privacy and Security Breaches: 
+There is a risk of unauthorized access to 
+sensitive biometric data (facial 
+embeddings) or user information during 
+transmission or storage. Plan B: Enforcing strict encryption protocols 
+(SSL/TLS) for all data transmission. Implementing 
+AES encryption for the database and robust Token-
+based authentication for all API endpoints. 
+ 
+ 
+ 
+PROJECT OUTCOMES 
+ 
+Output Type Output Expected Time of Output 
+Scientific/Academic  
+(Conference Paper, Journal Paper, 
+Book Chapter etc.) 1. Conference Paper: A study 
+on Edge Architecture for Real-
+time Surveillance and FIQA 
+implementation. 1. 8-10 Month (Following the 
+finalization of the project) 
+Economical/Commercial/Social  
+(Product, Prototype, Patent etc.) 1. Functional Prototype:  Fully 
+integrated system comprising 
+the Mobile Application, 
+Backend Server, and Edge 
+Node (Raspberry Pi). 
+ 
+2. Commercial Product:  
+Scalable, low latency "Robust 
+Face Recognition" security 
+system ready for market 
+deployment. 1. 6-8 Month (Aligned with WP9 
+Finalization ) 
+ 
+2. 10-12 Month (post-testing 
+refinement phase) 
+ 
+  
+ 
+ 
+ 15 
+  
+  
+Impact Area  Does 
+project 
+impact? 
+Direct or 
+indirect? Impact Definition  
+Social 
+How the project affects 
+people and society  
+(Who benefits from the 
+project? 
+Does it improve 
+accessibility, inclusion, or 
+equality? 
+Does it reduce manual effort 
+or improve quality of life?)  
+ 
+SDG 10 - Reduced 
+Inequalities  YES - 
+Direct The project reduces manual effort by automating access 
+control, eliminating the need for physical keys or manual ID 
+checks. By using low-cost hardware (Raspberry Pi), it also 
+democratizes high-security technology, making advanced 
+surveillance accessible to smaller communities and 
+organizations, not just wealthy entities.  
+Health 
+How the project affects 
+health directly or indirectly  
+(Does it reduce stress, 
+workload, or human error?  
+Does it support health 
+monitoring, safety, or 
+wellbeing? 
+Does it prevent unsafe 
+working conditions?)  
+ 
+SDG 3 - Good Health and 
+Well-being  YES - 
+Indirect The system provides a contactless entry mechanism. By 
+eliminating the need to touch shared keypads, fingerprint 
+scanners, or exchange physical cards, it reduces the risk of 
+spreading hygiene-related pathogens. It also reduces 
+physical confrontation risks for security staff by providing 
+early digital warnings for unauthorized persons.  
+Security 
+How security is achieved in 
+the project, or how the 
+project increases the 
+security 
+(How is user data protected?  
+What security risks exist?)  
+ 
+SDG 16 - Peace, Justice, 
+and Strong Institutions   YES - 
+Direct This is the project's primary function. It protects user data 
+privacy by processing biometric information entirely offline 
+(locally) on the Edge device, preventing data leakage 
+associated with cloud storage. It eliminates security risks 
+related to lost, stolen, or copied physical ID cards, ensuring 
+only authorized individuals can access the facility.  
+Economic 
+How the project contributes 
+to the economy  
+(Does it reduce costs?  
+Does it improve 
+productivity?)  
+ 
+SDG 8 - Decent Work and 
+Economic Growth   YES - 
+Direct The project reduces costs significantly by avoiding expensive 
+commercial cloud subscriptions and high-end proprietary 
+hardware. It improves productivity for facility managers by 
+automating entry logging and reporting, removing the need 
+for manual record-keeping.  
+Sustainability and 
+Environment  
+How the project contributes 
+to the sustainability and 
+affects the environment  
+(Does it reduce paper 
+usage? 
+Does it optimize energy or 
+resource consumption?  
+Is computer system usage 
+efficient?) 
+ 
+SDG 11 - Sustainable cities 
+and communities  
+SDG 13 - Climate Action  
+SDG 12 - Responsible 
+Consumption and 
+Production YES - 
+Direct The project optimizes energy consumption (SDG 12) by 
+using low-power embedded hardware (Raspberry Pi) instead 
+of energy-intensive servers. It integrates an ultrasonic sensor 
+(HC-SR04) to activate the processor only when motion is 
+detected, minimizing idle power usage. It also supports Safe 
+Cities (SDG 11) by creating secure environments through 
+automated surveillance.  
+ 
+ 
+ 16 
+  
+ REFERENCES 
+ 
+[1] F. Schroff, D. Kalenichenko, and J. Philbin, "FaceNet: A unified embedding for face recognition and clustering," 
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp. 815-823, 2015. 
+ 
+[2] J. Deng, J. Guo, N. Xue, and S. Zafeiriou, "ArcFace: Additive angular margin loss for deep face recognition," 
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp. 4690-4699, 
+2019. 
+ 
+[3] Y. Kortli, M. Jridi, A. Al Falou, and M. Atri, "Face recognition systems: A survey," Sensors, vol. 20, no. 2, pp. 1-
+42, 2020. 
+ 
+[4] J. Hernandez-Ortega, J. Fierrez, A. Morales, R. Vera-Rodriguez, and J. Ortega-Garcia, "FaceQnet: Quality 
+assessment for face recognition based on deep learning," Proceedings of the IEEE International Conference on 
+Biometrics (ICB), pp. 1-8, 2019. 
+ 
+[5] L. Best-Rowden and A. K. Jain, "Learning face image quality from human assessments," IEEE Transactions on 
+Information Forensics and Security, vol. 13, no. 12, pp. 3064-3077, 2018. 
+ 
+[6] J. Zhao, J. Yan, and J. Feng, "Towards age-invariant face recognition," IEEE Transactions on Pattern Analysis 
+and Machine Intelligence, vol. 42, no. 2, pp. 474-487, 2020. 
+ 
+[7] J. Galbally, S. Marcel, and J. Fierrez, "Biometric antispoofing methods: A survey in face recognition," IEEE 
+Access, vol. 2, pp. 1530-1552, 2014. 
+ 
+[8] W. Shi, J. Cao, Q. Zhang, Y. Li, and L. Xu, "Edge computing: Vision and challenges," IEEE Internet of Things 
+Journal, vol. 3, no. 5, pp. 637-646, 2016. 
+ 
+[9] C. Zhang, I. Patras, and E. R. Hancock, "Learning face representations from scratch," IEEE Transactions on 
+Information Forensics and Security, vol. 13, no. 5, pp. 1226-1239, 2018. 
+ 
+[10] P. Terhörst, J. N. Kolf, N. Damer, F. Kirchbuchner, and A. Kuijper, "A comprehensive study on face recognition 
+biases beyond demographics," IEEE Transactions on Biometrics, Behavior, and Identity Science, vol. 3, no. 1, pp. 
+3-20, 2021. 
+ 
+[11] J. Guo, X. Zhu, and S. Yang, "InsightFace: 2D and 3D face analysis project," IEEE Transactions on Information 
+Forensics and Security, vol. 16, pp. 3511-3525, 2021. 
+ 
+[12] J. Deng, J. Guo, Y. Zhou, J. Yu, I. Kotsia, and S. Zafeiriou, "RetinaFace: Single-stage dense face localisation 
+in the wild," Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp. 
+5203-5212, 2020. 
+ 
+[13] Y. Taigman, M. Yang, M. Ranzato, and L. Wolf, "DeepFace: Closing the gap to human-level performance in 
+face verification," Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp. 
+1701-1708, 2014. 
+ 
+[14] C. Szegedy, W. Liu, Y. Jia, et al., "Going deeper with convolutions," Proceedings of the IEEE Conference on 
+Computer Vision and Pattern Recognition (CVPR), pp. 1-9, 2015. 
+ 
+[15] S. Mittal, "A survey of FPGA-based accelerators for convolutional neural networks," Neural Computing and 
+Applications, vol. 32, no. 4, pp. 1109-1139, 2020. 
+ 
+[16] Z. Zhou, X. Chen, E. Li, L. Zeng, K. Luo, and J. Zhang, "Edge intelligence: Paving the last mile of artificial 
+intelligence with edge computing," Proceedings of the IEEE, vol. 107, no. 8, pp. 1738-1762, 2019. 
+ 
+[17] J. Johnson, M. Douze, and H. Jégou, "Billion-scale similarity search with GPUs," IEEE Transactions on Big 
+Data, vol. 7, no. 3, pp. 535-547, 2019. 
+ 
+[18] N. K. Ratha, J. H. Connell, and R. M. Bolle, "Enhancing security and privacy in biometrics-based authentication 
+systems," IBM Systems Journal, vol. 40, no. 3, pp. 614-634, 2001. 
+ 
+[19] I. Chingovska, A. Anjos, and S. Marcel, "On the effectiveness of local binary patterns in face anti-spoofing," 
+Proceedings of the IEEE International Conference on Biometrics Special Interest Group (BIOSIG), pp. 1-7, 2012. 
+ 
+[20] E. Learned-Miller, G. B. Huang, A. RoyChowdhury, H. Li, and G. Hua, "Labeled faces in the wild: A survey," 
+Advances in Face Detection and Facial Image Analysis, Springer, pp. 189-248, 2016. 
+ 
+ 
+ 17 
+  
+ [21] FaceIntel Technologies, "FaceIntel Access Control & Surveillance Solutions," [Online].  
+ 
+[22] BioID GmbH, "BioID Facial Recognition and Liveness Detection," [Online].  
+ 
+[23] Q. Cao, L. Shen, W. Xie, O. M. Parkhi, and A. Zisserman, "VGGFace2: A dataset for recognizing faces across 
+pose and age," Proceedings of the IEEE International Conference on Automatic Face and Gesture Recognition 
+(FG), pp. 67-74, 2018. 
+ 
+[24] G. Jocher, A. Chaurasia, and J. Qiu, "Ultralytics YOLO," version 8.0.0 , [Online]. 
+ 
+[25] Kisi Inc., "Cloud-Based Access Control System," [Online]. 
+ 
+[26] Verizon. (2023). 2023 Data Breach Investigations Report (DBIR) . 
+ 
+[27] Kim, A., & Moon, J. (2018). Mitigating Tailgating in Physical Security using IoT Sensors. IEEE 
+International Conference on Consumer Electronics (ICCE) . 
+ 
+[28] Jain, A. K., Ross, A., & Prabhakar, S. (2004). An Introduction to Biometric Recognition. IEEE 
+Transactions on Circuits and Systems for Video Technology , 14(1), 4-20. 
+ 
+[29] H. Wang, Y. Wang, and Y. Cao, "Video-based face recognition: A survey," World Academy of Science, 
+Engineering and Technology , vol. 60, pp. 293-302, 2009. 
+ 
+[30] T. Schlett, C. Rathgeb, O. Henniger, J. Galbally, J. Fierrez, and C. Busch, "Face image quality assessment: 
+A literature survey," ACM Computing Surveys (CSUR) , vol. 54, no. 10s, pp. 1-49, 2022. 

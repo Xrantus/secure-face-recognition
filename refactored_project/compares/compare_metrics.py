@@ -2,11 +2,9 @@
 Similarity Metric Comparison for Face Recognition
 ==================================================
 Metrics  : Cosine | Euclidean (L2) | Manhattan (L1) | Mahalanobis | Pearson
-Detector : yolo11n_filtered_int8.onnx
-Embedder : buffalo_s  –  w600k_mbf.onnx  (512-d, L2-normalised)
-Known    : tar1.h264   (enrolled persons: buket, kerem, meric, nedret)
-Unknown  : tar2.h264   (persons NOT in DB)
-DB       : db-images/  — one mean-embedding per person
+Detector : Modüler FaceDetector
+Embedder : Modüler FaceRecognizer (buffalo_s - 512d)
+DB       : known_faces_embeddings.npz (ortak L2-normalised mean DB)
 
 Outputs
 -------
@@ -17,11 +15,9 @@ Outputs
 from __future__ import annotations
 
 import csv
-import os
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -31,28 +27,28 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc as sk_auc
 
 # ---------------------------------------------------------------------------
-# Paths
+# Paths and Imports Setup
 # ---------------------------------------------------------------------------
-COMPARES_DIR   = Path(__file__).resolve().parent        # .../compares
-REFACTORED_DIR = COMPARES_DIR.parent                    # .../refactored_project
-YENI_DIR       = REFACTORED_DIR.parent                  # .../yeni
+COMPARES_DIR   = Path(__file__).resolve().parent
+REFACTORED_DIR = COMPARES_DIR.parent
+WORKSPACE_ROOT = REFACTORED_DIR.parent
 
 if str(REFACTORED_DIR) not in sys.path:
     sys.path.insert(0, str(REFACTORED_DIR))
 
-from face_detector import FaceDetector  # noqa: E402 — needs sys.path patch above
+from face_detector import FaceDetector
+from face_recognizer import FaceRecognizer
 
-YOLO_PATH     = YENI_DIR / "yolo11-modes" / "yolo11n_filtered_int8.onnx"
-BUFFALO_S_REC = COMPARES_DIR / "models" / "buffalo_s" / "w600k_mbf.onnx"
-DB_ROOT       = YENI_DIR / "db-images"
-KNOWN_VIDEO   = YENI_DIR / "test-videos" / "tar1.h264"
-UNKNOWN_VIDEO = YENI_DIR / "test-videos" / "tar2.h264"
+DB_PATH       = WORKSPACE_ROOT / "known_faces_embeddings.npz"
+KNOWN_VIDEO   = WORKSPACE_ROOT / "test-videos" / "tar1.h264"
+UNKNOWN_VIDEO = WORKSPACE_ROOT / "test-videos" / "tar2.h264"
 OUT_DIR       = COMPARES_DIR / "metric_comparison"
 CSV_PATH      = COMPARES_DIR / "metrics_raw.csv"
 
-MAHAL_LAMBDA  = 0.1   # Ridge λ for covariance regularisation
-FRAME_SKIP    = 1     # process every N-th frame  (1 = all frames)
-N_SWEEP       = 200   # threshold sweep resolution
+# Configuration variables
+MAHAL_LAMBDA  = 0.1   # Ridge regularization constant
+FRAME_SKIP    = 1     # Process all frames
+N_SWEEP       = 200   # Threshold sweep steps
 
 METRIC_NAMES  = ["cosine", "l2", "l1", "mahalanobis", "pearson"]
 METRIC_LABELS = {
@@ -62,8 +58,8 @@ METRIC_LABELS = {
     "mahalanobis": "Mahalanobis Distance",
     "pearson":     "Pearson Correlation",
 }
-# True  → higher score means more similar  (decision: score >= threshold)
-# False → lower  score means more similar  (decision: score <= threshold)
+
+# Similarity vs Distance classification
 IS_SIMILARITY = {
     "cosine":      True,
     "l2":          False,
@@ -71,6 +67,7 @@ IS_SIMILARITY = {
     "mahalanobis": False,
     "pearson":     True,
 }
+
 PALETTE = {
     "cosine":      "#4C8BF5",
     "l2":          "#E84393",
@@ -78,6 +75,7 @@ PALETTE = {
     "mahalanobis": "#9C27B0",
     "pearson":     "#00C896",
 }
+
 CSV_FIELDS = ["frame_id", "video", "cosine", "l2", "l1",
               "mahalanobis", "pearson", "embed_ms"]
 
@@ -88,66 +86,9 @@ plt.rcParams.update({
     "axes.spines.right": False,
 })
 
-
 # ===========================================================================
-# Buffalo-S embedder (direct ONNX — no full InsightFace stack needed)
+# Math Helpers
 # ===========================================================================
-class BuffaloSEmbedder:
-    """Wraps w600k_mbf.onnx for 112×112 ArcFace inference."""
-
-    def __init__(self, model_path: Path) -> None:
-        import onnxruntime as ort
-        opts = ort.SessionOptions()
-        opts.inter_op_num_threads = 2
-        opts.intra_op_num_threads = 2
-        self._sess  = ort.InferenceSession(
-            str(model_path),
-            sess_options=opts,
-            providers=["CPUExecutionProvider"],
-        )
-        self._iname = self._sess.get_inputs()[0].name
-
-    def embed(self, face_bgr: np.ndarray) -> Optional[np.ndarray]:
-        try:
-            img  = cv2.resize(face_bgr, (112, 112))
-            img  = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img  = (img.astype(np.float32) - 127.5) / 128.0
-            blob = img.transpose(2, 0, 1)[np.newaxis]           # NCHW
-            out  = self._sess.run(None, {self._iname: blob})[0]
-            v    = out.flatten().astype(np.float32)
-            n    = np.linalg.norm(v)
-            return v / n if n > 1e-12 else v
-        except Exception:
-            return None
-
-
-# ===========================================================================
-# Utility helpers
-# ===========================================================================
-def _clamp(v, lo, hi):
-    return max(lo, min(hi, v))
-
-
-def crop_with_padding(img: np.ndarray, bbox, pad: float = 0.20) -> Optional[np.ndarray]:
-    x1, y1, x2, y2 = bbox
-    h, w = img.shape[:2]
-    x1, x2 = _clamp(x1, 0, w-1), _clamp(x2, 0, w-1)
-    y1, y2 = _clamp(y1, 0, h-1), _clamp(y2, 0, h-1)
-    if x2 <= x1 or y2 <= y1:
-        return None
-    bw, bh = x2-x1, y2-y1
-    if min(bw, bh) < 35:
-        return None
-    pw, ph = int(bw*pad), int(bh*pad)
-    roi = img[max(0, y1-ph):min(h, y2+ph), max(0, x1-pw):min(w, x2+pw)]
-    return roi if roi.size > 0 else None
-
-
-def l2_norm(v: np.ndarray) -> np.ndarray:
-    n = np.linalg.norm(v)
-    return v / n if n > 1e-12 else v
-
-
 def pearson(a: np.ndarray, b: np.ndarray) -> float:
     a_c = a - a.mean()
     b_c = b - b.mean()
@@ -155,46 +96,8 @@ def pearson(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a_c, b_c) / (denom + 1e-12))
 
 
-# ===========================================================================
-# DB building
-# ===========================================================================
-def build_db(db_root: Path, detector: FaceDetector,
-             embedder: BuffaloSEmbedder):
-    """Return (db_embs [N×512] float32, db_names [N] str)."""
-    person_dirs = sorted(p for p in db_root.iterdir() if p.is_dir())
-    embs, names = [], []
-    for pdir in person_dirs:
-        per = []
-        for fname in sorted(os.listdir(pdir)):
-            if not fname.lower().endswith((".png", ".jpg", ".jpeg")):
-                continue
-            raw = np.fromfile(str(pdir / fname), np.uint8)
-            img = cv2.imdecode(raw, cv2.IMREAD_COLOR)
-            if img is None:
-                continue
-            dets = detector.detect(img)
-            best = FaceDetector.best_by_conf(dets)
-            if best is None:
-                continue
-            roi = crop_with_padding(img, best.bbox)
-            if roi is None:
-                continue
-            v = embedder.embed(roi)
-            if v is not None:
-                per.append(v)
-        if per:
-            mean_v = l2_norm(np.mean(np.stack(per), axis=0))
-            embs.append(mean_v)
-            names.append(pdir.name)
-            print(f"    {pdir.name:15s}: {len(per)} images → 1 mean embedding")
-    return np.array(embs, dtype=np.float32), np.array(names)
-
-
-# ===========================================================================
-# Mahalanobis precomputation
-# ===========================================================================
 def build_inv_cov(db_embs: np.ndarray, lam: float = MAHAL_LAMBDA) -> np.ndarray:
-    """Ridge-regularised inverse covariance matrix from DB embeddings."""
+    """Precompute regularized inverse covariance matrix for Mahalanobis."""
     if db_embs.shape[0] < 2:
         return np.eye(db_embs.shape[1], dtype=np.float32)
     cov  = np.cov(db_embs.T).astype(np.float64)
@@ -203,23 +106,35 @@ def build_inv_cov(db_embs: np.ndarray, lam: float = MAHAL_LAMBDA) -> np.ndarray:
     return inv.astype(np.float32)
 
 
-def mah_dist(probe: np.ndarray, ref: np.ndarray,
-             inv_cov: np.ndarray) -> float:
+def mah_dist(probe: np.ndarray, ref: np.ndarray, inv_cov: np.ndarray) -> float:
     d = (probe - ref).astype(np.float64)
-    return float(np.sqrt(np.maximum(0.0, d @ inv_cov.astype(np.float64) @ d)))
+    return float(np.sqrt(np.maximum(0.0, d @ inv_cov @ d)))
+
+
+def crop_with_padding(frame: np.ndarray, bbox, pad: float = 0.20) -> np.ndarray | None:
+    x1, y1, x2, y2 = bbox
+    h, w = frame.shape[:2]
+    x1, x2 = max(0, min(w - 1, x1)), max(0, min(w - 1, x2))
+    y1, y2 = max(0, min(h - 1, y1)), max(0, min(h - 1, y2))
+    if x2 <= x1 or y2 <= y1:
+        return None
+    bw, bh = x2 - x1, y2 - y1
+    if min(bw, bh) < 35:
+        return None
+    pw, ph = int(bw * pad), int(bh * pad)
+    roi = frame[max(0, y1 - ph):min(h, y2 + ph), max(0, x1 - pw):min(w, x2 + pw)]
+    return roi if roi.size > 0 else None
 
 
 # ===========================================================================
-# Score computation  (all 5 metrics vs DB → best per metric)
+# Matching Engines
 # ===========================================================================
-def compute_scores(probe: np.ndarray, db_embs: np.ndarray,
-                   inv_cov: np.ndarray) -> dict:
-    cosines  = db_embs @ probe                                    # (N,)
-    diffs    = db_embs - probe                                    # (N,512)
+def compute_scores(probe: np.ndarray, db_embs: np.ndarray, inv_cov: np.ndarray) -> dict:
+    cosines  = db_embs @ probe
+    diffs    = db_embs - probe
     l2s      = np.linalg.norm(diffs, axis=1)
     l1s      = np.sum(np.abs(diffs), axis=1)
-    mahs     = np.array([mah_dist(probe, ref, inv_cov)
-                         for ref in db_embs])
+    mahs     = np.array([mah_dist(probe, ref, inv_cov) for ref in db_embs])
     pearsons = np.array([pearson(probe, ref) for ref in db_embs])
     return {
         "cosine":      float(np.max(cosines)),
@@ -231,12 +146,16 @@ def compute_scores(probe: np.ndarray, db_embs: np.ndarray,
 
 
 # ===========================================================================
-# Video processing
+# Video Pipeline
 # ===========================================================================
-def process_video(video_path: Path, label: str,
-                  detector: FaceDetector, embedder: BuffaloSEmbedder,
-                  db_embs: np.ndarray, inv_cov: np.ndarray,
-                  frame_skip: int = FRAME_SKIP) -> list[dict]:
+def process_video(
+    video_path: Path,
+    label: str,
+    detector: FaceDetector,
+    recognizer: FaceRecognizer,
+    db_embs: np.ndarray,
+    inv_cov: np.ndarray,
+) -> list[dict]:
     rows: list[dict] = []
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -250,18 +169,22 @@ def process_video(video_path: Path, label: str,
         if not ret:
             break
         frame_id += 1
-        if frame_id % frame_skip != 0:
+        if frame_id % FRAME_SKIP != 0:
             continue
+
         dets = detector.detect(frame)
         for d in dets:
             roi = crop_with_padding(frame, d.bbox)
             if roi is None:
                 continue
+
             t0  = time.perf_counter()
-            emb = embedder.embed(roi)
+            emb = recognizer.embed_from_roi(roi)
             ms  = (time.perf_counter() - t0) * 1000
+
             if emb is None:
                 continue
+
             scores = compute_scores(emb, db_embs, inv_cov)
             row = {"frame_id": frame_id, "video": label, "embed_ms": round(ms, 3)}
             row.update({k: round(v, 6) for k, v in scores.items()})
@@ -274,19 +197,15 @@ def process_video(video_path: Path, label: str,
 
 
 # ===========================================================================
-# CSV save
+# Plots and Analytics
 # ===========================================================================
-def save_csv(rows: list[dict], path: Path) -> None:
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=CSV_FIELDS)
-        w.writeheader()
-        w.writerows(rows)
-    print(f"  CSV saved: {path}  ({len(rows)} rows)")
+def _save(fig: plt.Figure, name: str) -> None:
+    p = OUT_DIR / name
+    fig.savefig(p, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Plot saved: {p.name}")
 
 
-# ===========================================================================
-# Analysis helpers
-# ===========================================================================
 def split(rows: list[dict], metric: str):
     k = np.array([r[metric] for r in rows if r["video"] == "known"])
     u = np.array([r[metric] for r in rows if r["video"] == "unknown"])
@@ -330,15 +249,8 @@ def fisher_ratio(k: np.ndarray, u: np.ndarray) -> float:
 
 
 # ===========================================================================
-# Plots
+# Visualizations
 # ===========================================================================
-def _save(fig: plt.Figure, name: str) -> None:
-    p = OUT_DIR / name
-    fig.savefig(p, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Plot saved: {p.name}")
-
-
 def plot_roc_curves(rows: list[dict]) -> None:
     fig, ax = plt.subplots(figsize=(8, 6))
     for m in METRIC_NAMES:
@@ -358,9 +270,8 @@ def plot_score_distributions(rows: list[dict]) -> None:
     fig, axes = plt.subplots(1, 5, figsize=(22, 5))
     for ax, m in zip(axes, METRIC_NAMES):
         k, u = split(rows, m)
-        data   = [k, u]
-        vp = ax.violinplot(data, positions=[0, 1], showmedians=True,
-                           widths=0.7)
+        data = [k, u]
+        vp = ax.violinplot(data, positions=[0, 1], showmedians=True, widths=0.7)
         for body in vp["bodies"]:
             body.set_facecolor(PALETTE[m])
             body.set_alpha(0.55)
@@ -389,19 +300,18 @@ def plot_histograms(rows: list[dict]) -> None:
         ax.set_ylabel("Density")
         ax.legend(fontsize=8)
         ax.grid(alpha=0.3)
-    fig.suptitle("Score Histograms — Known vs Unknown (density)", fontsize=13,
+    fig.suptitle("Score Histograms — Known vs Unknown", fontsize=13,
                  fontweight="bold", y=1.02)
     fig.tight_layout()
     _save(fig, "03_score_histograms.png")
 
 
 def plot_threshold_sweep(rows: list[dict]) -> None:
-    fig, axes = plt.subplots(1, 5, figsize=(22, 5), sharey=False)
+    fig, axes = plt.subplots(1, 5, figsize=(22, 5))
     for ax, m in zip(axes, METRIC_NAMES):
         ths, tars, fars = tar_far_sweep(rows, m)
         ax.plot(ths, tars, color=PALETTE[m], lw=2, label="TAR")
         ax.plot(ths, fars, color="#E53935",   lw=2, linestyle="--", label="FAR")
-        # Mark EER-equivalent: where TAR+FAR ≈ 100 and they cross
         cross = np.argmin(np.abs(tars - (100 - fars)))
         ax.axvline(ths[cross], color="gray", lw=1, linestyle=":")
         ax.set_title(METRIC_LABELS[m], fontsize=10, fontweight="bold")
@@ -417,20 +327,17 @@ def plot_threshold_sweep(rows: list[dict]) -> None:
 
 
 def plot_summary_bars(stats: dict) -> None:
-    """stats[metric] = {auc, eer, fisher}"""
     labels = [METRIC_LABELS[m] for m in METRIC_NAMES]
     colors = [PALETTE[m] for m in METRIC_NAMES]
     x = np.arange(len(METRIC_NAMES))
-    w = 0.25
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
-    for ax, key, title, ylabel, better in zip(
+    for ax, key, title, ylabel in zip(
         axes,
         ["auc",   "eer",   "fisher"],
         ["AUC",   "EER",   "Fisher Discriminant Ratio"],
-        ["AUC ↑", "EER ↓ (lower is better)", "FDR ↑ (higher is better)"],
-        ["high",  "low",   "high"],
+        ["AUC ↑", "EER ↓", "FDR ↑"],
     ):
         vals = [stats[m][key] for m in METRIC_NAMES]
         bars = ax.bar(x, vals, color=colors, edgecolor="white", width=0.6)
@@ -451,8 +358,6 @@ def plot_summary_bars(stats: dict) -> None:
 
 
 def plot_tar_far_at_thresholds(rows: list[dict]) -> None:
-    """Heat-map style: TAR and FAR for each metric at several fixed thresholds."""
-    # Compute relative thresholds per metric (0%, 25%, 50%, 75%, 100% of range)
     fig, axes = plt.subplots(2, 5, figsize=(22, 8))
     for col, m in enumerate(METRIC_NAMES):
         ths, tars, fars = tar_far_sweep(rows, m)
@@ -472,20 +377,82 @@ def plot_tar_far_at_thresholds(rows: list[dict]) -> None:
         ax_far.set_ylim(-2, 105)
         ax_far.grid(alpha=0.3)
 
-    axes[0][0].annotate("TAR vs Threshold", xy=(0, 0.5),
-                        xycoords="axes fraction", rotation=90,
-                        va="center", ha="right", fontsize=10)
-    axes[1][0].annotate("FAR vs Threshold", xy=(0, 0.5),
-                        xycoords="axes fraction", rotation=90,
-                        va="center", ha="right", fontsize=10)
-    fig.suptitle("TAR and FAR Across Threshold Range — All Metrics",
-                 fontsize=13, fontweight="bold")
+    fig.suptitle("TAR and FAR Sweep Across Ranges", fontsize=13, fontweight="bold")
     fig.tight_layout()
     _save(fig, "06_tar_far_grid.png")
 
 
+def plot_tar_far_heatmaps(rows: list[dict]) -> None:
+    """TAR and FAR Heatmaps across key thresholds for each metric."""
+    steps = {
+        "cosine":      [0.3, 0.4, 0.5, 0.6, 0.7],
+        "l2":          [0.6, 0.8, 1.0, 1.2, 1.4],
+        "l1":          [12.0, 16.0, 20.0, 24.0, 28.0],
+        "mahalanobis": [1.5, 2.0, 2.5, 3.0, 3.5],
+        "pearson":     [0.3, 0.4, 0.5, 0.6, 0.7],
+    }
+
+    metrics = ["cosine", "l2", "l1", "mahalanobis", "pearson"]
+    labels = [METRIC_LABELS[m] for m in metrics]
+
+    tar_matrix = np.zeros((len(metrics), 5))
+    far_matrix = np.zeros((len(metrics), 5))
+
+    for i, m in enumerate(metrics):
+        k, u = split(rows, m)
+        for j, th in enumerate(steps[m]):
+            if IS_SIMILARITY[m]:
+                tar = np.mean(k >= th) * 100 if len(k) > 0 else 0.0
+                far = np.mean(u >= th) * 100 if len(u) > 0 else 0.0
+            else:
+                tar = np.mean(k <= th) * 100 if len(k) > 0 else 0.0
+                far = np.mean(u <= th) * 100 if len(u) > 0 else 0.0
+            tar_matrix[i, j] = tar
+            far_matrix[i, j] = far
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    # 1. TAR Heatmap
+    ax = axes[0]
+    ax.imshow(tar_matrix, cmap="Greens", aspect="auto", vmin=0, vmax=100)
+    ax.set_xticks(np.arange(5))
+    ax.set_xticklabels(["T1", "T2", "T3", "T4", "T5"])
+    ax.set_yticks(np.arange(len(metrics)))
+    ax.set_yticklabels(labels)
+    ax.set_title("True Acceptance Rate (TAR %) Heatmap ↑", fontweight="bold")
+
+    for i, m in enumerate(metrics):
+        for j in range(5):
+            th = steps[m][j]
+            val = tar_matrix[i, j]
+            text = f"{val:.1f}%\n({th:.1f})"
+            color = "white" if val > 65 else "black"
+            ax.text(j, i, text, ha="center", va="center", color=color, fontsize=9, fontweight="bold")
+
+    # 2. FAR Heatmap
+    ax = axes[1]
+    ax.imshow(far_matrix, cmap="Reds", aspect="auto", vmin=0, vmax=100)
+    ax.set_xticks(np.arange(5))
+    ax.set_xticklabels(["T1", "T2", "T3", "T4", "T5"])
+    ax.set_yticks(np.arange(len(metrics)))
+    ax.set_yticklabels(labels)
+    ax.set_title("False Acceptance Rate (FAR %) Heatmap ↓", fontweight="bold")
+
+    for i, m in enumerate(metrics):
+        for j in range(5):
+            th = steps[m][j]
+            val = far_matrix[i, j]
+            text = f"{val:.1f}%\n({th:.1f})"
+            color = "white" if val > 65 else "black"
+            ax.text(j, i, text, ha="center", va="center", color=color, fontsize=9, fontweight="bold")
+
+    fig.suptitle("TAR and FAR across Key Thresholds - Metric Heatmaps", fontsize=14, fontweight="bold", y=1.02)
+    fig.tight_layout()
+    _save(fig, "07_tar_far_heatmaps.png")
+
+
 # ===========================================================================
-# Console summary
+# Reporting
 # ===========================================================================
 def print_summary(stats: dict) -> str:
     lines = []
@@ -511,14 +478,14 @@ def print_summary(stats: dict) -> str:
 
 
 # ===========================================================================
-# MAIN
+# Main Runner
 # ===========================================================================
 def main() -> None:
-    # --- Sanity checks ---
+    if not DB_PATH.exists():
+        print(f"[!] DB file not found: {DB_PATH}. Please run db_create_refactored first.")
+        sys.exit(1)
+
     for path, label in [
-        (YOLO_PATH,     "YOLO model"),
-        (BUFFALO_S_REC, "buffalo_s recognition model"),
-        (DB_ROOT,       "DB images folder"),
         (KNOWN_VIDEO,   "known video"),
         (UNKNOWN_VIDEO, "unknown video"),
     ]:
@@ -532,45 +499,47 @@ def main() -> None:
     print("  SIMILARITY METRIC COMPARISON  —  buffalo_s + YOLO11n".center(65))
     print("=" * 65)
 
-    # --- Load detector ---
-    print("\n[1/5] Loading YOLO detector …")
+    # --- Load detector & recognizer (Modular!) ---
+    print("\n[1/5] Loading modular YOLO detector …")
     detector = FaceDetector(
-        model_path=str(YOLO_PATH),
+        model_path=str(WORKSPACE_ROOT / "yolo11-modes" / "yolo11n_filtered_int8.onnx"),
         img_size=640, pred_conf=0.5,
         iou=0.4, max_det=10, det_threshold=0.5,
     )
 
-    # --- Load embedder ---
-    print("[2/5] Loading buffalo_s embedder …")
-    embedder = BuffaloSEmbedder(BUFFALO_S_REC)
+    print("[2/5] Loading modular FaceRecognizer (buffalo_s) …")
+    recognizer = FaceRecognizer(
+        det_size=(160, 160),
+        model_name="buffalo_s",
+    )
 
-    # --- Build DB ---
-    print("[3/5] Building DB …")
-    db_embs, db_names = build_db(DB_ROOT, detector, embedder)
-    if db_embs.size == 0:
-        print("[!] DB is empty — aborting.")
-        sys.exit(1)
+    # --- Load official L2-normalized database ---
+    print("[3/5] Loading official database …")
+    db_embs, db_names = FaceRecognizer.load_db(str(DB_PATH))
     print(f"  DB ready: {len(db_names)} persons  →  {db_embs.shape}")
 
-    # --- Mahalanobis covariance ---
-    print("  Computing ridge-regularised covariance (λ=0.1) …")
+    # Compute covariance for Mahalanobis
     inv_cov = build_inv_cov(db_embs, MAHAL_LAMBDA)
 
     # --- Process videos ---
     print(f"\n[4/5] Processing videos (frame_skip={FRAME_SKIP}) …")
-    rows_k = process_video(KNOWN_VIDEO,   "known",   detector, embedder, db_embs, inv_cov)
-    rows_u = process_video(UNKNOWN_VIDEO, "unknown", detector, embedder, db_embs, inv_cov)
+    rows_k = process_video(KNOWN_VIDEO,   "known",   detector, recognizer, db_embs, inv_cov)
+    rows_u = process_video(UNKNOWN_VIDEO, "unknown", detector, recognizer, db_embs, inv_cov)
     all_rows = rows_k + rows_u
 
     if len(all_rows) == 0:
         print("[!] No faces detected — aborting.")
         sys.exit(1)
 
-    save_csv(all_rows, CSV_PATH)
+    # Save raw CSV
+    with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+        writer.writeheader()
+        writer.writerows(all_rows)
+    print(f"  CSV saved: {CSV_PATH}  ({len(all_rows)} rows)")
 
     # --- Analysis & plots ---
     print(f"\n[5/5] Computing stats & generating plots …")
-
     stats: dict = {}
     for m in METRIC_NAMES:
         fpr, tpr, auc_val, eer, eer_th = compute_roc(all_rows, m)
@@ -584,13 +553,13 @@ def main() -> None:
     plot_threshold_sweep(all_rows)
     plot_summary_bars(stats)
     plot_tar_far_at_thresholds(all_rows)
+    plot_tar_far_heatmaps(all_rows)
 
     report = print_summary(stats)
     report_path = OUT_DIR / "summary_report.txt"
     report_path.write_text(report, encoding="utf-8")
     print(f"  Report saved: {report_path.name}")
-
-    print(f"\nAll outputs → {OUT_DIR}\n")
+    print(f"\nAll outputs successfully saved to -> {OUT_DIR}\n")
 
 
 if __name__ == "__main__":

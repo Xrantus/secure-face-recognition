@@ -39,6 +39,13 @@ PALETTE = {
 # ---------------------------------------------------------------------------
 # Load CSV
 # ---------------------------------------------------------------------------
+if not CSV_PATH.exists():
+    import sys
+    print(f"[!] Ham veri dosyası bulunamadı: {CSV_PATH}")
+    print("Lütfen önce metrikleri karşılaştıran betiği çalıştırın:")
+    print("  python -m refactored_project.compares.compare_metrics")
+    sys.exit(1)
+
 rows = []
 with open(CSV_PATH, newline="", encoding="utf-8") as f:
     for r in csv.DictReader(f):
