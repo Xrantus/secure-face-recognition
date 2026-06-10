@@ -21,7 +21,7 @@ from .api_server import app, setup_api
 from .backend_client import fetch_and_save_embeddings, send_access_log, send_unknown_access_log, sync_offline_logs
 from .face_detector import FaceDetector
 from .face_recognizer import FaceRecognizer, SimilarityMetric
-from .face_ui import WINDOW_TITLE, draw_face_label, show_frame
+from .face_ui import WINDOW_TITLE, draw_face_label, show_frame, start_rpi_preview, stop_rpi_preview
 from .main import resolve_model_path, resolve_video_path, crop_with_padding, metric_threshold
 
 
@@ -251,6 +251,7 @@ class LiveFaceRecognitionSystem:
         cfg = picam.create_preview_configuration({"size": config.CAMERA_CONFIG.rpi_preview_size})
         picam.configure(cfg)
         picam.start()
+        start_rpi_preview(picam)
 
         t = threading.Thread(target=reader, args=(picam,), daemon=True)
         t.start()
@@ -325,7 +326,7 @@ class LiveFaceRecognitionSystem:
                     fps_t0 = now
                     fps_n = 0
 
-                if not show_frame(frame, WINDOW_TITLE):
+                if not show_frame(frame, WINDOW_TITLE, picam=picam):
                     running = False
                     break
 
@@ -335,6 +336,7 @@ class LiveFaceRecognitionSystem:
         finally:
             running = False
             t.join(timeout=1)
+            stop_rpi_preview(picam)
             try:
                 picam.stop()
             except Exception:
