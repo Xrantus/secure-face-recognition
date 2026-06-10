@@ -44,6 +44,7 @@ def fetch_and_save_embeddings(db_abs: str) -> tuple[np.ndarray, np.ndarray] | No
         # Varsayim: [{"id": "Ahmet", "embedding": [0.1, 0.2, ...]}, ...]
         new_names = []
         new_embs = []
+        unique_user_ids: set[str] = set()
         
         for item in data:
             # Backend'in dondurdugu DTO: EmbeddingDTO {id, userId, userName, photoId, embedding, dimension}
@@ -53,6 +54,7 @@ def fetch_and_save_embeddings(db_abs: str) -> tuple[np.ndarray, np.ndarray] | No
             if len(emb_vector) > 0:
                 new_names.append(person_id)
                 new_embs.append(np.array(emb_vector, dtype=np.float32))
+                unique_user_ids.add(person_id)
                 
         if not new_names:
             print("[Backend Client] Uyari: Backend'den bos veri dondu veya format hatali.")
@@ -60,7 +62,7 @@ def fetch_and_save_embeddings(db_abs: str) -> tuple[np.ndarray, np.ndarray] | No
             
         # Npz olarak kaydet
         np.savez(db_abs, encodings=new_embs, names=new_names)
-        print(f"[Backend Client] {len(new_names)} personelin yuz verisi guncellendi.")
+        print(f"[Backend Client] {len(unique_user_ids)} personelin yuz verisi guncellendi.")
         
         # Bellege yukle ve geri don
         return FaceRecognizer.load_db(db_abs)
@@ -97,6 +99,35 @@ def send_access_log(person_id: str) -> None:
         
     except requests.RequestException:
         print(f"[Backend Client] Baglanti yok. Log cevrimdisi kaydediliyor: {person_id}")
+        _save_log_offline(payload)
+
+
+def send_unknown_access_log(score: float | None = None) -> None:
+    """
+    Sends an access log for an unrecognized face detected on RPi.
+    If offline, saves it locally (same as send_access_log).
+    """
+    url = f"{BACKEND_BASE_URL}/api/access-logs"
+    score_text = ""
+    if score is not None and not (isinstance(score, float) and np.isnan(score)):
+        score_text = f" (Skor: {score:.3f})"
+    payload = {
+        "userId": None,
+        "accessType": "UNKNOWN",
+        "details": f"RPi cihazindan taninmayan yuz algilandi{score_text}",
+        "deviceId": "RPI_MAIN_DOOR",
+        "accessTime": _get_current_time_iso(),
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=3)
+        response.raise_for_status()
+        print("[Backend Client] Taninmayan yuz logu gonderildi")
+
+        sync_offline_logs()
+
+    except requests.RequestException:
+        print("[Backend Client] Baglanti yok. Taninmayan yuz logu cevrimdisi kaydediliyor")
         _save_log_offline(payload)
 
 

@@ -18,9 +18,10 @@ import uvicorn
 
 from . import config
 from .api_server import app, setup_api
-from .backend_client import fetch_and_save_embeddings, send_access_log, sync_offline_logs
+from .backend_client import fetch_and_save_embeddings, send_access_log, send_unknown_access_log, sync_offline_logs
 from .face_detector import FaceDetector
 from .face_recognizer import FaceRecognizer, SimilarityMetric
+from .face_ui import WINDOW_TITLE, draw_face_label, show_frame
 from .main import resolve_model_path, resolve_video_path, crop_with_padding, metric_threshold
 
 
@@ -69,6 +70,7 @@ class LiveFaceRecognitionSystem:
         
         self.LOG_COOLDOWN_SECONDS = 5.0
         self.last_seen = {}
+        self.UNKNOWN_LOG_KEY = "__UNKNOWN__"
 
     def fetch_and_reload_db(self) -> None:
         """Fetch new embeddings from Backend and update db_state in memory."""
@@ -256,7 +258,7 @@ class LiveFaceRecognitionSystem:
         while latest_frame is None and running:
             time.sleep(0.05)
 
-        print("Sistem Aktif! (Durdurmak icin terminalde CTRL+C)\n")
+        print("Sistem Aktif! Pencereyi kapatmak icin 'q' tusuna basin (veya CTRL+C).\n")
 
         frame_counter = 0
         last_dets: list = []
@@ -307,12 +309,25 @@ class LiveFaceRecognitionSystem:
                             threading.Thread(target=send_access_log, args=(name,), daemon=True).start()
                     else:
                         print(f"[HATA AYIKLAMA] Yuz algilandi ama eslesmedi. En yakin: {name} (Skor: {score:.3f})")
+                        t_now = time.time()
+                        if (
+                            self.UNKNOWN_LOG_KEY not in self.last_seen
+                            or (t_now - self.last_seen[self.UNKNOWN_LOG_KEY]) > self.LOG_COOLDOWN_SECONDS
+                        ):
+                            self.last_seen[self.UNKNOWN_LOG_KEY] = t_now
+                            threading.Thread(target=send_unknown_access_log, args=(score,), daemon=True).start()
+
+                    draw_face_label(frame, det.bbox, name, score, self.metric)
 
                 now = time.time()
                 if now - fps_t0 >= 1.0:
                     print(f"Anlik FPS: {fps_n / (now - fps_t0):.2f}")
                     fps_t0 = now
                     fps_n = 0
+
+                if not show_frame(frame, WINDOW_TITLE):
+                    running = False
+                    break
 
                 frame_counter += 1
         except KeyboardInterrupt:
@@ -324,6 +339,7 @@ class LiveFaceRecognitionSystem:
                 picam.stop()
             except Exception:
                 pass
+            cv2.destroyAllWindows()
 
     def _run_video(self, video_path: str) -> None:
         cap = cv2.VideoCapture(video_path)
