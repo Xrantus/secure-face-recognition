@@ -90,7 +90,7 @@ class LiveFaceRecognitionSystem:
 
     def _make_access_log_policy(self) -> AccessLogPolicy:
         def on_authorized(user_id: str) -> None:
-            print(f"[BASARILI] {user_id} tespit edildi! (gecis logu gonderiliyor)")
+            print(f"[LOG] Gecis logu gonderiliyor: {user_id}")
             threading.Thread(target=send_access_log, args=(user_id,), daemon=True).start()
 
         def on_unknown(track_id: int, score: float | None) -> None:
@@ -128,6 +128,8 @@ class LiveFaceRecognitionSystem:
                 metric=self.metric,
                 threshold=self.threshold,
             )
+            if name != "Unknown":
+                print(f"[BASARILI] {name} tespit edildi! (Skor: {score:.3f})")
             observations.append(FaceObservation(bbox=det.bbox, name=name, score=score))
 
         return observations

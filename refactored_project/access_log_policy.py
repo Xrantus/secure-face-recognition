@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 
@@ -42,7 +42,7 @@ def _iou(a: BBox, b: BBox) -> float:
 
 
 class AccessLogPolicy:
-    """Per-userId authorized visits and per-track unknown confirmation/logging."""
+    """Per-userId authorized log cooldown and per-track unknown confirmation/logging."""
 
     def __init__(
         self,
@@ -51,6 +51,7 @@ class AccessLogPolicy:
         absence_reset_seconds: float = 4.0,
         unknown_confirm_cycles: int = 3,
         auth_unknown_suppress_seconds: float = 8.0,
+        authorized_log_cooldown_seconds: float = 60.0,
         track_iou_threshold: float = 0.3,
         spatial_suppress_iou: float = 0.25,
     ) -> None:
@@ -59,13 +60,14 @@ class AccessLogPolicy:
         self._absence_reset = absence_reset_seconds
         self._unknown_confirm = unknown_confirm_cycles
         self._auth_unknown_suppress = auth_unknown_suppress_seconds
+        self._authorized_log_cooldown = authorized_log_cooldown_seconds
         self._track_iou_threshold = track_iou_threshold
         self._spatial_suppress_iou = spatial_suppress_iou
 
         self._tracks: dict[int, _FaceTrack] = {}
         self._next_track_id = 1
-        self._authorized_visit_logged: set[str] = set()
         self._authorized_last_seen: dict[str, float] = {}
+        self._last_authorized_log_sent: dict[str, float] = {}
         self._user_unknown_suppress_until: dict[str, float] = {}
 
     def update(self, observations: list[FaceObservation], t_now: float) -> None:
@@ -95,9 +97,8 @@ class AccessLogPolicy:
         for track_id in expired_track_ids:
             del self._tracks[track_id]
 
-        for user_id in list(self._authorized_visit_logged):
+        for user_id in list(self._user_unknown_suppress_until):
             if t_now - self._authorized_last_seen.get(user_id, 0.0) > self._absence_reset:
-                self._authorized_visit_logged.discard(user_id)
                 self._user_unknown_suppress_until.pop(user_id, None)
 
     def _match_observations(
@@ -154,8 +155,9 @@ class AccessLogPolicy:
                 track.unknown_streak = 0
 
             self._authorized_last_seen[obs.name] = t_now
-            if obs.name not in self._authorized_visit_logged:
-                self._authorized_visit_logged.add(obs.name)
+            last_log_sent = self._last_authorized_log_sent.get(obs.name, 0.0)
+            if t_now - last_log_sent >= self._authorized_log_cooldown:
+                self._last_authorized_log_sent[obs.name] = t_now
                 self._on_authorized(obs.name)
 
             track.ever_recognized_user = obs.name
