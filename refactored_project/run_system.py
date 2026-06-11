@@ -23,7 +23,7 @@ from .api_server import app, setup_api
 from .backend_client import fetch_and_save_embeddings, send_access_log, send_unknown_access_log, sync_offline_logs
 from .face_detector import FaceDetector
 from .face_recognizer import FaceRecognizer, SimilarityMetric
-from .face_ui import WINDOW_TITLE, draw_face_label, show_frame, start_rpi_preview, stop_rpi_preview
+from .face_ui import WINDOW_TITLE, draw_face_label, init_display, is_headless, show_frame, stop_rpi_preview
 from .main import resolve_model_path, resolve_video_path, crop_with_padding, metric_threshold
 
 
@@ -297,9 +297,12 @@ class LiveFaceRecognitionSystem:
         if latest_frame is None:
             raise SystemExit("Picamera2 akisi baslatilamadi. Kamera kablosu ve picamera2 kurulumunu kontrol edin.")
 
-        start_rpi_preview(picam)
+        init_display(picam)
 
-        print("Sistem Aktif! Pencereyi kapatmak icin 'q' tusuna basin (veya CTRL+C).\n")
+        if is_headless():
+            print("Sistem Aktif! (Headless — durdurmak icin CTRL+C)\n")
+        else:
+            print("Sistem Aktif! Pencereyi kapatmak icin 'q' tusuna basin (veya CTRL+C).\n")
 
         frame_counter = 0
         last_dets: list = []

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 import cv2
 import numpy as np
@@ -13,6 +14,7 @@ WINDOW_TITLE = "Face Recognition (YOLO + InsightFace)"
 
 _gui_warned = False
 _rpi_preview_mode: str | None = None
+_display_mode: str = "unknown"  # "rpi" | "opencv" | "headless"
 
 
 def draw_face_label(
@@ -86,7 +88,7 @@ def show_frame_rpi(picam, frame: np.ndarray) -> None:
 
 def stop_rpi_preview(picam) -> None:
     """Clear overlay and stop Picamera2 preview."""
-    global _rpi_preview_mode
+    global _rpi_preview_mode, _display_mode
 
     try:
         picam.set_overlay(None)
@@ -97,23 +99,78 @@ def stop_rpi_preview(picam) -> None:
     except Exception:
         pass
     _rpi_preview_mode = None
+    _display_mode = "unknown"
+
+
+def _x_display_available() -> bool:
+    if sys.platform in ("win32", "darwin"):
+        return True
+
+    display = os.environ.get("DISPLAY", "").strip()
+    if not display:
+        return False
+    if display.startswith(":"):
+        try:
+            num = display[1:].split(".")[0]
+            return os.path.exists(f"/tmp/.X11-unix/X{num}")
+        except (ValueError, IndexError):
+            return False
+    return True
+
+
+def _probe_opencv_display(window_title: str) -> bool:
+    if not _x_display_available():
+        return False
+    try:
+        cv2.namedWindow(window_title, cv2.WINDOW_NORMAL)
+        cv2.destroyWindow(window_title)
+        return True
+    except cv2.error:
+        return False
+
+
+def init_display(picam=None, window_title: str = WINDOW_TITLE) -> str:
+    """
+    Detect available display backend once at startup.
+    Returns "rpi", "opencv", or "headless".
+    """
+    global _display_mode, _gui_warned
+
+    if picam is not None and start_rpi_preview(picam):
+        _display_mode = "rpi"
+        return _display_mode
+
+    if _probe_opencv_display(window_title):
+        _display_mode = "opencv"
+        print("[UI] OpenCV onizleme aktif.")
+        return _display_mode
+
+    _display_mode = "headless"
+    if not _gui_warned:
+        print(
+            "[UI] Ekran bulunamadi; headless modda devam ediliyor "
+            "(yuz tanima calisir, onizleme yok — CTRL+C ile cikis)."
+        )
+        _gui_warned = True
+    return _display_mode
+
+
+def is_headless() -> bool:
+    return _display_mode == "headless"
 
 
 def _try_opencv_window(frame: np.ndarray, window_title: str) -> bool:
     """Show frame in OpenCV window. Returns False if user pressed 'q'."""
-    global _gui_warned
-
-    if not os.environ.get("DISPLAY"):
-        os.environ["DISPLAY"] = ":0"
+    global _gui_warned, _display_mode
 
     try:
         cv2.imshow(window_title, frame)
         return (cv2.waitKey(1) & 0xFF) != ord("q")
     except cv2.error as exc:
+        _display_mode = "headless"
         if not _gui_warned:
             print(
-                f"[UI] OpenCV penceresi acilamadi ({exc}). "
-                "RPi'de HDMI monitor veya masaustu oturumu gerekir."
+                f"[UI] OpenCV penceresi kapandi ({exc}); headless moda gecildi."
             )
             _gui_warned = True
         return True
@@ -125,19 +182,27 @@ def show_frame(
     picam=None,
 ) -> bool:
     """
-    Show annotated frame.
+    Show annotated frame when a display is available.
     On RPi with active preview uses HDMI overlay; otherwise tries OpenCV.
-    Returns False if user pressed 'q' (OpenCV mode only).
+    In headless mode this is a no-op. Returns False if user pressed 'q' (OpenCV only).
     """
-    global _gui_warned
+    global _gui_warned, _display_mode
 
-    if picam is not None and _rpi_preview_mode is not None:
+    if _display_mode == "headless":
+        return True
+
+    if _display_mode == "rpi" and picam is not None:
         try:
             show_frame_rpi(picam, frame)
             return True
         except Exception as exc:
+            _display_mode = "headless"
             if not _gui_warned:
-                print(f"[UI] RPi overlay hatasi: {exc}")
+                print(f"[UI] RPi overlay hatasi; headless moda gecildi: {exc}")
                 _gui_warned = True
+            return True
 
-    return _try_opencv_window(frame, window_title)
+    if _display_mode == "opencv":
+        return _try_opencv_window(frame, window_title)
+
+    return True
