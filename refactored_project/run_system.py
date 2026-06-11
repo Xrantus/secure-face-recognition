@@ -7,6 +7,7 @@ camera loop (Mac/WIN or RPi) in the main thread.
 from __future__ import annotations
 
 import argparse
+import sys
 import threading
 import time
 from pathlib import Path
@@ -17,12 +18,29 @@ import numpy as np
 import uvicorn
 
 from . import config
+from .access_log_policy import AccessLogPolicy, FaceObservation
 from .api_server import app, setup_api
 from .backend_client import fetch_and_save_embeddings, send_access_log, send_unknown_access_log, sync_offline_logs
 from .face_detector import FaceDetector
 from .face_recognizer import FaceRecognizer, SimilarityMetric
 from .face_ui import WINDOW_TITLE, draw_face_label, show_frame, start_rpi_preview, stop_rpi_preview
 from .main import resolve_model_path, resolve_video_path, crop_with_padding, metric_threshold
+
+
+def _is_raspberry_pi() -> bool:
+    try:
+        with open("/proc/device-tree/model", encoding="utf-8") as f:
+            return "raspberry pi" in f.read().lower()
+    except OSError:
+        return False
+
+
+def resolve_hardware_env(requested: Literal["MAC", "RPI", "WIN"], explicit: bool) -> Literal["MAC", "RPI", "WIN"]:
+    """Pi'de --hardware-env verilmediyse otomatik Picamera2 modu."""
+    if not explicit and _is_raspberry_pi():
+        print("[SISTEM] Raspberry Pi algilandi -> Picamera2 (RPI) modu kullaniliyor.")
+        return "RPI"
+    return requested
 
 
 class LiveFaceRecognitionSystem:
@@ -68,9 +86,56 @@ class LiveFaceRecognitionSystem:
             "names": np.array([])
         }
         
-        self.LOG_COOLDOWN_SECONDS = 5.0
-        self.last_seen = {}
-        self.UNKNOWN_LOG_KEY = "__UNKNOWN__"
+        self.access_log_policy = self._make_access_log_policy()
+
+    def _make_access_log_policy(self) -> AccessLogPolicy:
+        def on_authorized(user_id: str) -> None:
+            print(f"[BASARILI] {user_id} tespit edildi! (gecis logu gonderiliyor)")
+            threading.Thread(target=send_access_log, args=(user_id,), daemon=True).start()
+
+        def on_unknown(track_id: int, score: float | None) -> None:
+            score_txt = f" (Skor: {score:.3f})" if score is not None else ""
+            print(f"[UYARI] Taninmayan yuz track:{track_id}{score_txt} (log gonderiliyor)")
+            threading.Thread(
+                target=send_unknown_access_log,
+                args=(score, track_id),
+                daemon=True,
+            ).start()
+
+        return AccessLogPolicy(on_authorized=on_authorized, on_unknown=on_unknown)
+
+    def _recognize_observations(self, frame: np.ndarray, dets: list) -> list[FaceObservation]:
+        observations: list[FaceObservation] = []
+
+        for det in dets:
+            roi = crop_with_padding(frame, det.bbox, config.MODEL_CONFIG.landmark_pad)
+            if roi is None:
+                continue
+
+            with self.inference_lock:
+                emb = self.recognizer.embed_from_roi(roi)
+            if emb is None:
+                continue
+
+            with self.db_lock:
+                curr_embs = self.db_state["embs"]
+                curr_names = self.db_state["names"]
+
+            name, score = FaceRecognizer.predict_identity(
+                emb=emb,
+                db_embs=curr_embs,
+                db_names=curr_names,
+                metric=self.metric,
+                threshold=self.threshold,
+            )
+            observations.append(FaceObservation(bbox=det.bbox, name=name, score=score))
+
+        return observations
+
+    @staticmethod
+    def _draw_observations(frame: np.ndarray, observations: list[FaceObservation], metric: SimilarityMetric) -> None:
+        for obs in observations:
+            draw_face_label(frame, obs.bbox, obs.name, obs.score, metric)
 
     def fetch_and_reload_db(self) -> None:
         """Fetch new embeddings from Backend and update db_state in memory."""
@@ -155,6 +220,7 @@ class LiveFaceRecognitionSystem:
 
         frame_counter = 0
         last_dets: list = []
+        last_observations: list[FaceObservation] = []
         fps_t0 = time.time()
         fps_n = 0
 
@@ -168,44 +234,14 @@ class LiveFaceRecognitionSystem:
                 frame = cv2.flip(frame, 1)
                 fps_n += 1
 
-                if frame_counter % config.MODEL_CONFIG.frame_skip == 0:
+                ran_detection = frame_counter % config.MODEL_CONFIG.frame_skip == 0
+                if ran_detection:
                     with self.inference_lock:
                         last_dets = self.detector.detect(frame)
+                    last_observations = self._recognize_observations(frame, last_dets)
+                    self.access_log_policy.update(last_observations, time.time())
 
-                for det in last_dets:
-                    roi = crop_with_padding(frame, det.bbox, config.MODEL_CONFIG.landmark_pad)
-                    if roi is None:
-                        continue
-
-                    with self.inference_lock:
-                        emb = self.recognizer.embed_from_roi(roi)
-                    if emb is None:
-                        continue
-
-                    with self.db_lock:
-                        curr_embs = self.db_state["embs"]
-                        curr_names = self.db_state["names"]
-
-                    name, score = FaceRecognizer.predict_identity(
-                        emb=emb,
-                        db_embs=curr_embs,
-                        db_names=curr_names,
-                        metric=self.metric,
-                        threshold=self.threshold,
-                    )
-
-                    if name != "Unknown":
-                        t_now = time.time()
-                        if name not in self.last_seen or (t_now - self.last_seen[name]) > self.LOG_COOLDOWN_SECONDS:
-                            self.last_seen[name] = t_now
-                            threading.Thread(target=send_access_log, args=(name,), daemon=True).start()
-
-                    color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
-                    label = f"{name} {score:.2f}" if self.metric == "cosine" else f"{name} {score:.3f}"
-
-                    x1, y1, x2, y2 = det.bbox
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                    cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                self._draw_observations(frame, last_observations, self.metric)
 
                 now = time.time()
                 if now - fps_t0 >= 1.0:
@@ -251,7 +287,6 @@ class LiveFaceRecognitionSystem:
         cfg = picam.create_preview_configuration({"size": config.CAMERA_CONFIG.rpi_preview_size})
         picam.configure(cfg)
         picam.start()
-        start_rpi_preview(picam)
 
         t = threading.Thread(target=reader, args=(picam,), daemon=True)
         t.start()
@@ -259,10 +294,16 @@ class LiveFaceRecognitionSystem:
         while latest_frame is None and running:
             time.sleep(0.05)
 
+        if latest_frame is None:
+            raise SystemExit("Picamera2 akisi baslatilamadi. Kamera kablosu ve picamera2 kurulumunu kontrol edin.")
+
+        start_rpi_preview(picam)
+
         print("Sistem Aktif! Pencereyi kapatmak icin 'q' tusuna basin (veya CTRL+C).\n")
 
         frame_counter = 0
         last_dets: list = []
+        last_observations: list[FaceObservation] = []
         fps_t0 = time.time()
         fps_n = 0
 
@@ -276,49 +317,14 @@ class LiveFaceRecognitionSystem:
                 frame = cv2.flip(frame, 1)
                 fps_n += 1
 
-                if frame_counter % config.MODEL_CONFIG.frame_skip == 0:
+                ran_detection = frame_counter % config.MODEL_CONFIG.frame_skip == 0
+                if ran_detection:
                     with self.inference_lock:
                         last_dets = self.detector.detect(frame)
+                    last_observations = self._recognize_observations(frame, last_dets)
+                    self.access_log_policy.update(last_observations, time.time())
 
-                for det in last_dets:
-                    roi = crop_with_padding(frame, det.bbox, config.MODEL_CONFIG.landmark_pad)
-                    if roi is None:
-                        continue
-
-                    with self.inference_lock:
-                        emb = self.recognizer.embed_from_roi(roi)
-                    if emb is None:
-                        continue
-
-                    with self.db_lock:
-                        curr_embs = self.db_state["embs"]
-                        curr_names = self.db_state["names"]
-
-                    name, score = FaceRecognizer.predict_identity(
-                        emb=emb,
-                        db_embs=curr_embs,
-                        db_names=curr_names,
-                        metric=self.metric,
-                        threshold=self.threshold,
-                    )
-
-                    if name != "Unknown":
-                        print(f"[BASARILI] {name} tespit edildi! (Skor: {score:.3f})")
-                        t_now = time.time()
-                        if name not in self.last_seen or (t_now - self.last_seen[name]) > self.LOG_COOLDOWN_SECONDS:
-                            self.last_seen[name] = t_now
-                            threading.Thread(target=send_access_log, args=(name,), daemon=True).start()
-                    else:
-                        print(f"[HATA AYIKLAMA] Yuz algilandi ama eslesmedi. En yakin: {name} (Skor: {score:.3f})")
-                        t_now = time.time()
-                        if (
-                            self.UNKNOWN_LOG_KEY not in self.last_seen
-                            or (t_now - self.last_seen[self.UNKNOWN_LOG_KEY]) > self.LOG_COOLDOWN_SECONDS
-                        ):
-                            self.last_seen[self.UNKNOWN_LOG_KEY] = t_now
-                            threading.Thread(target=send_unknown_access_log, args=(score,), daemon=True).start()
-
-                    draw_face_label(frame, det.bbox, name, score, self.metric)
+                self._draw_observations(frame, last_observations, self.metric)
 
                 now = time.time()
                 if now - fps_t0 >= 1.0:
@@ -428,8 +434,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_arg_parser().parse_args()
+    hardware_env = resolve_hardware_env(args.hardware_env, explicit="--hardware-env" in sys.argv)
     system = LiveFaceRecognitionSystem(
-        hardware_env=args.hardware_env,
+        hardware_env=hardware_env,
         yolo_model_path=args.yolo_model_path,
         recognizer_model_name=args.recognizer_model_name,
         metric=args.metric,

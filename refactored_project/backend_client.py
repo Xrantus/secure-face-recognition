@@ -102,7 +102,7 @@ def send_access_log(person_id: str) -> None:
         _save_log_offline(payload)
 
 
-def send_unknown_access_log(score: float | None = None) -> None:
+def send_unknown_access_log(score: float | None = None, track_id: int | None = None) -> None:
     """
     Sends an access log for an unrecognized face detected on RPi.
     If offline, saves it locally (same as send_access_log).
@@ -111,10 +111,11 @@ def send_unknown_access_log(score: float | None = None) -> None:
     score_text = ""
     if score is not None and not (isinstance(score, float) and np.isnan(score)):
         score_text = f" (Skor: {score:.3f})"
+    track_text = f" track:{track_id}" if track_id is not None else ""
     payload = {
         "userId": None,
         "accessType": "UNKNOWN",
-        "details": f"RPi cihazindan taninmayan yuz algilandi{score_text}",
+        "details": f"RPi cihazindan taninmayan yuz algilandi{track_text}{score_text}",
         "deviceId": "RPI_MAIN_DOOR",
         "accessTime": _get_current_time_iso(),
     }

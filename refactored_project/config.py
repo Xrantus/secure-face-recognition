@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+# Windows/Mac gelistirme icin WIN; Pi'de run_system otomatik RPI algilar.
 HARDWARE_ENV: Literal["MAC", "RPI", "WIN"] = "WIN"
 
 
