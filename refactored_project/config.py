@@ -59,11 +59,14 @@ class CameraConfig:
 class ProximityConfig:
     """HC-SR04 pins and distance thresholds (centimetres)."""
 
+    enabled: bool = True
     trigger_pin: int = 17
     echo_pin: int = 27
     activate_cm: float = 100.0
     deactivate_cm: float = 120.0
     poll_interval_s: float = 0.1
+    # Sensor bagli degilse veya surekli hata verirse inference'i kapatma.
+    fallback_on_error: bool = True
 
 
 def default_model_config(project_root: Path) -> ModelConfig:

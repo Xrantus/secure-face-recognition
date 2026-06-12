@@ -24,7 +24,15 @@ from .backend_client import fetch_and_save_embeddings, send_access_log, send_unk
 from .face_detector import FaceDetector
 from .face_recognizer import FaceRecognizer, SimilarityMetric
 from .distance_sensor import ProximityTrigger
-from .face_ui import WINDOW_TITLE, draw_face_label, init_display, is_headless, show_frame, stop_rpi_preview
+from .face_ui import (
+    WINDOW_TITLE,
+    draw_face_label,
+    draw_status_hud,
+    init_display,
+    is_headless,
+    show_frame,
+    stop_rpi_preview,
+)
 from .main import resolve_model_path, resolve_video_path, crop_with_padding, metric_threshold
 
 
@@ -54,8 +62,10 @@ class LiveFaceRecognitionSystem:
         threshold_override: float | None,
         db_path: str,
         video: str | None,
+        no_proximity: bool = False,
     ):
         self.hardware_env = hardware_env
+        self.no_proximity = no_proximity
         self.metric = metric
         self.threshold = float(threshold_override) if threshold_override is not None else metric_threshold(metric)
         self.video = video
@@ -307,7 +317,10 @@ class LiveFaceRecognitionSystem:
         else:
             print("Sistem Aktif! Pencereyi kapatmak icin 'q' tusuna basin (veya CTRL+C).\n")
 
-        proximity = ProximityTrigger(config.PROXIMITY_CONFIG)
+        proximity = ProximityTrigger(
+            config.PROXIMITY_CONFIG,
+            force_active=self.no_proximity,
+        )
         proximity.start()
 
         frame_counter = 0
@@ -315,6 +328,7 @@ class LiveFaceRecognitionSystem:
         last_observations: list[FaceObservation] = []
         fps_t0 = time.time()
         fps_n = 0
+        display_fps = 0.0
 
         try:
             while running:
@@ -343,9 +357,24 @@ class LiveFaceRecognitionSystem:
 
                 now = time.time()
                 if now - fps_t0 >= 1.0:
-                    print(f"Anlik FPS: {fps_n / (now - fps_t0):.2f}")
+                    display_fps = fps_n / (now - fps_t0)
+                    print(f"Anlik FPS: {display_fps:.2f}")
                     fps_t0 = now
                     fps_n = 0
+
+                if not is_headless():
+                    det_state = (
+                        "AKTIF"
+                        if proximity.is_active()
+                        else "BEKLEMEDE (yakinlik)"
+                    )
+                    draw_status_hud(
+                        frame,
+                        [
+                            f"Yuz tespiti: {det_state}",
+                            f"FPS: {display_fps:.1f} | Yuz: {len(last_observations)}",
+                        ],
+                    )
 
                 if not show_frame(frame, WINDOW_TITLE, picam=picam):
                     running = False
@@ -445,6 +474,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--threshold", type=float, default=None, help="Override metric threshold")
     p.add_argument("--db-path", default=config.MODEL_CONFIG.db_path)
     p.add_argument("--video", default=None)
+    p.add_argument(
+        "--no-proximity",
+        action="store_true",
+        help="HC-SR04 olmadan veya demo icin yuz tespitini surekli acik tut",
+    )
     return p
 
 
@@ -459,6 +493,7 @@ def main() -> None:
         threshold_override=args.threshold,
         db_path=args.db_path,
         video=args.video,
+        no_proximity=args.no_proximity,
     )
     system.run()
 

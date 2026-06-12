@@ -81,11 +81,40 @@ def start_rpi_preview(picam) -> str | None:
     return None
 
 
+def draw_status_hud(frame: np.ndarray, lines: list[str]) -> None:
+    """Draw small status text on the top-left of the preview frame."""
+    for i, line in enumerate(lines):
+        y = 22 + i * 26
+        cv2.putText(
+            frame,
+            line,
+            (8, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (0, 0, 0),
+            3,
+        )
+        cv2.putText(
+            frame,
+            line,
+            (8, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (0, 255, 255),
+            1,
+        )
+
+
 def show_frame_rpi(picam, frame: np.ndarray) -> None:
     """Push annotated frame to Picamera2 HDMI overlay."""
     cfg = picam.camera_configuration()
-    main = cfg.get("main", {})
-    target_w, target_h = main.get("size", (frame.shape[1], frame.shape[0]))
+    target_w, target_h = frame.shape[1], frame.shape[0]
+    for stream_name in ("main", "lores"):
+        stream = cfg.get(stream_name, {})
+        size = stream.get("size")
+        if size:
+            target_w, target_h = size
+            break
 
     h, w = frame.shape[:2]
     if (w, h) != (target_w, target_h):
@@ -93,7 +122,8 @@ def show_frame_rpi(picam, frame: np.ndarray) -> None:
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     alpha = np.full((target_h, target_w, 1), 255, dtype=np.uint8)
-    picam.set_overlay(np.concatenate([rgb, alpha], axis=2))
+    overlay = np.ascontiguousarray(np.concatenate([rgb, alpha], axis=2))
+    picam.set_overlay(overlay)
 
 
 def stop_rpi_preview(picam) -> None:
