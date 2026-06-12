@@ -41,7 +41,10 @@ def draw_face_label(
 
 
 def start_rpi_preview(picam) -> str | None:
-    """Start HDMI preview on Raspberry Pi. Returns backend name or None."""
+    """Start HDMI preview on Raspberry Pi. Returns backend name or None.
+
+    Must be called after ``picam.configure()`` and **before** ``picam.start()``.
+    """
     global _rpi_preview_mode
 
     try:
@@ -51,7 +54,13 @@ def start_rpi_preview(picam) -> str | None:
         _rpi_preview_mode = None
         return None
 
-    for preview_cls, name in ((Preview.QTGL, "QTGL"), (Preview.DRM, "DRM")):
+    # SSH oturumunda X11 yok; DRM dogrudan HDMI framebuffer kullanir.
+    if _x_display_available():
+        backends = ((Preview.QTGL, "QTGL"), (Preview.DRM, "DRM"))
+    else:
+        backends = ((Preview.DRM, "DRM"), (Preview.QTGL, "QTGL"))
+
+    for preview_cls, name in backends:
         try:
             picam.start_preview(preview_cls)
             _rpi_preview_mode = name
@@ -66,7 +75,8 @@ def start_rpi_preview(picam) -> str | None:
     _rpi_preview_mode = None
     print(
         "[UI] UYARI: HDMI onizleme acilamadi. "
-        "Pi'ye monitor bagli mi? Masaustu oturumu acik mi? (SSH disinda)"
+        "Monitor HDMI'ye bagli mi? (SSH ile calistirmak sorun degil; "
+        "onizleme Pi'nin bagli monitorunde acilir.)"
     )
     return None
 

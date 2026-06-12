@@ -55,6 +55,17 @@ class CameraConfig:
     rpi_preview_size: tuple[int, int] = (640, 480)
 
 
+@dataclass(frozen=True)
+class ProximityConfig:
+    """HC-SR04 pins and distance thresholds (centimetres)."""
+
+    trigger_pin: int = 17
+    echo_pin: int = 27
+    activate_cm: float = 100.0
+    deactivate_cm: float = 120.0
+    poll_interval_s: float = 0.1
+
+
 def default_model_config(project_root: Path) -> ModelConfig:
     """Return a sensible default model config for this repository."""
 
@@ -76,4 +87,5 @@ def default_model_config(project_root: Path) -> ModelConfig:
 MODEL_CONFIG: ModelConfig = default_model_config(Path(__file__).resolve().parents[1])
 METRIC_CONFIG = MetricConfig()
 CAMERA_CONFIG = CameraConfig()
+PROXIMITY_CONFIG = ProximityConfig()
 

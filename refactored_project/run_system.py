@@ -23,6 +23,7 @@ from .api_server import app, setup_api
 from .backend_client import fetch_and_save_embeddings, send_access_log, send_unknown_access_log, sync_offline_logs
 from .face_detector import FaceDetector
 from .face_recognizer import FaceRecognizer, SimilarityMetric
+from .distance_sensor import ProximityTrigger
 from .face_ui import WINDOW_TITLE, draw_face_label, init_display, is_headless, show_frame, stop_rpi_preview
 from .main import resolve_model_path, resolve_video_path, crop_with_padding, metric_threshold
 
@@ -288,6 +289,8 @@ class LiveFaceRecognitionSystem:
         picam = Picamera2()
         cfg = picam.create_preview_configuration({"size": config.CAMERA_CONFIG.rpi_preview_size})
         picam.configure(cfg)
+        # Preview, picam.start() oncesinde acilmali (aksi halde event loop catismasi).
+        init_display(picam)
         picam.start()
 
         t = threading.Thread(target=reader, args=(picam,), daemon=True)
@@ -299,12 +302,13 @@ class LiveFaceRecognitionSystem:
         if latest_frame is None:
             raise SystemExit("Picamera2 akisi baslatilamadi. Kamera kablosu ve picamera2 kurulumunu kontrol edin.")
 
-        init_display(picam)
-
         if is_headless():
             print("Sistem Aktif! (Headless — durdurmak icin CTRL+C)\n")
         else:
             print("Sistem Aktif! Pencereyi kapatmak icin 'q' tusuna basin (veya CTRL+C).\n")
+
+        proximity = ProximityTrigger(config.PROXIMITY_CONFIG)
+        proximity.start()
 
         frame_counter = 0
         last_dets: list = []
@@ -323,11 +327,17 @@ class LiveFaceRecognitionSystem:
                 fps_n += 1
 
                 ran_detection = frame_counter % config.MODEL_CONFIG.frame_skip == 0
-                if ran_detection:
-                    with self.inference_lock:
-                        last_dets = self.detector.detect(frame)
-                    last_observations = self._recognize_observations(frame, last_dets)
+                if proximity.is_active():
+                    if ran_detection:
+                        with self.inference_lock:
+                            last_dets = self.detector.detect(frame)
+                        last_observations = self._recognize_observations(frame, last_dets)
                     self.access_log_policy.update(last_observations, time.time())
+                else:
+                    last_dets = []
+                    last_observations = []
+                    if ran_detection:
+                        self.access_log_policy.update([], time.time())
 
                 self._draw_observations(frame, last_observations, self.metric)
 
@@ -346,6 +356,7 @@ class LiveFaceRecognitionSystem:
             print("\n[BILGI] CTRL+C algilandi, sistem kapatiliyor...")
         finally:
             running = False
+            proximity.stop()
             t.join(timeout=1)
             stop_rpi_preview(picam)
             try:
