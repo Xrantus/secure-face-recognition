@@ -13,3 +13,4 @@ requests
 # Raspberry Pi only:
 # picamera2
 # gpiozero
+# lgpio

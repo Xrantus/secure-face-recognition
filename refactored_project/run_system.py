@@ -363,6 +363,8 @@ class LiveFaceRecognitionSystem:
                     fps_n = 0
 
                 if not is_headless():
+                    dist_cm = proximity.last_distance_cm
+                    dist_txt = f"{dist_cm:.0f} cm" if dist_cm is not None else "--"
                     det_state = (
                         "AKTIF"
                         if proximity.is_active()
@@ -371,7 +373,7 @@ class LiveFaceRecognitionSystem:
                     draw_status_hud(
                         frame,
                         [
-                            f"Yuz tespiti: {det_state}",
+                            f"Yuz tespiti: {det_state} | Mesafe: {dist_txt}",
                             f"FPS: {display_fps:.1f} | Yuz: {len(last_observations)}",
                         ],
                     )

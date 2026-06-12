@@ -64,9 +64,11 @@ class ProximityConfig:
     echo_pin: int = 27
     activate_cm: float = 100.0
     deactivate_cm: float = 120.0
-    poll_interval_s: float = 0.1
-    # Sensor bagli degilse veya surekli hata verirse inference'i kapatma.
-    fallback_on_error: bool = True
+    poll_interval_s: float = 0.15
+    min_read_interval_s: float = 0.06
+    warmup_attempts: int = 8
+    # True ise sensor bozuksa yine de tespit acilir; False = hatayi gizlemez.
+    fallback_on_error: bool = False
 
 
 def default_model_config(project_root: Path) -> ModelConfig:
