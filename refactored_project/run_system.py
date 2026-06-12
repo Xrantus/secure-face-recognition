@@ -321,7 +321,10 @@ class LiveFaceRecognitionSystem:
             config.PROXIMITY_CONFIG,
             force_active=self.no_proximity,
         )
-        proximity.start()
+        try:
+            proximity.start()
+        except Exception as exc:
+            print(f"[Proximity] Baslatma hatasi (sistem devam ediyor): {exc}")
 
         frame_counter = 0
         last_dets: list = []

@@ -7,35 +7,53 @@ import time
 
 from .config import ProximityConfig
 
-_pin_factory_configured = False
 
+class _HCSR04:
+    """HC-SR04 okuyucu — Pi 5 icin dogrudan lgpio (gpiozero DistanceSensor yerine)."""
 
-def _setup_pin_factory() -> None:
-    """Raspberry Pi 5 icin gpiozero pin fabrikasini ayarla."""
-    global _pin_factory_configured
-    if _pin_factory_configured:
-        return
+    def __init__(self, trigger_pin: int, echo_pin: int) -> None:
+        import lgpio
 
-    import gpiozero
+        self._lgpio = lgpio
+        self._chip = lgpio.gpiochip_open(0)
+        self._trigger = trigger_pin
+        self._echo = echo_pin
+        lgpio.gpio_claim_output(self._chip, self._trigger, lgpio.SET_PULL_NONE)
+        lgpio.gpio_claim_input(self._chip, self._echo, lgpio.SET_PULL_DOWN)
 
-    try:
-        from gpiozero.pins.lgpio import LGPIOFactory
-
-        gpiozero.Device.pin_factory = LGPIOFactory()
-        print("[Proximity] GPIO pin fabrikasi: lgpio (Pi 5 uyumlu)")
-    except ImportError:
+    def close(self) -> None:
         try:
-            from gpiozero.pins.rpigpio import RPiGPIOFactory
+            self._lgpio.gpiochip_close(self._chip)
+        except Exception:
+            pass
 
-            gpiozero.Device.pin_factory = RPiGPIOFactory()
-            print("[Proximity] GPIO pin fabrikasi: RPi.GPIO")
-        except ImportError:
-            print(
-                "[Proximity] UYARI: lgpio kurulu degil. "
-                "Pi 5'te: pip install lgpio gpiozero"
-            )
+    def read_distance_m(self) -> float | None:
+        lg = self._lgpio
+        h = self._chip
+        trigger = self._trigger
+        echo = self._echo
 
-    _pin_factory_configured = True
+        lg.gpio_write(h, trigger, 0)
+        time.sleep(0.000002)
+        lg.gpio_write(h, trigger, 1)
+        time.sleep(0.00001)
+        lg.gpio_write(h, trigger, 0)
+
+        deadline = time.perf_counter() + 0.1
+        while lg.gpio_read(h, echo) == 0:
+            if time.perf_counter() > deadline:
+                return None
+
+        t0 = time.perf_counter()
+        while lg.gpio_read(h, echo) == 1:
+            if time.perf_counter() - t0 > 0.1:
+                return None
+        t1 = time.perf_counter()
+
+        dist_m = (t1 - t0) * 343.0 / 2.0
+        if dist_m < 0.02 or dist_m > 4.0:
+            return None
+        return dist_m
 
 
 class ProximityTrigger:
@@ -45,7 +63,7 @@ class ProximityTrigger:
         self._active = False
         self._running = False
         self._thread: threading.Thread | None = None
-        self._sensor = None
+        self._sensor: _HCSR04 | None = None
         self._error_streak = 0
         self._fallback_logged = False
         self._last_distance_cm: float | None = None
@@ -57,40 +75,30 @@ class ProximityTrigger:
             return
 
         try:
-            from gpiozero import DistanceSensor
+            self._sensor = _HCSR04(self._cfg.trigger_pin, self._cfg.echo_pin)
         except ImportError:
-            print("[Proximity] gpiozero bulunamadi; pip install gpiozero lgpio")
+            print("[Proximity] lgpio bulunamadi; pip install lgpio")
+            self._handle_sensor_unavailable()
             return
-
-        _setup_pin_factory()
-
-        self._sensor = DistanceSensor(
-            echo=self._cfg.echo_pin,
-            trigger=self._cfg.trigger_pin,
-            max_distance=2.0,
-            queue_len=5,
-        )
-
-        if not self._warmup_sensor():
-            self._sensor.close()
+        except Exception as exc:
+            print(f"[Proximity] Sensor baslatilamadi: {exc}")
             self._sensor = None
-            if self._cfg.fallback_on_error:
-                self._active = True
-                print(
-                    "[Proximity] Sensor hazir degil; yuz tespiti surekli aktif "
-                    "(fallback_on_error=True)."
-                )
-            else:
-                print(
-                    "[Proximity] Sensor hazir degil; yuz tespiti kapali. "
-                    "Kablolama / lgpio kontrol edin veya --no-proximity kullanin."
-                )
+            self._handle_sensor_unavailable()
             return
 
         print(
-            f"[Proximity] Sensor hazir (TRIG=GPIO{self._cfg.trigger_pin}, "
-            f"ECHO=GPIO{self._cfg.echo_pin}). "
-            f"Aktif: <= {self._cfg.activate_cm:.0f} cm"
+            f"[Proximity] lgpio ile sensor acildi "
+            f"(TRIG=GPIO{self._cfg.trigger_pin}, ECHO=GPIO{self._cfg.echo_pin})"
+        )
+
+        if not self._warmup_sensor():
+            self._close_sensor()
+            self._handle_sensor_unavailable()
+            return
+
+        print(
+            f"[Proximity] Sensor hazir. "
+            f"Yakinlik esigi: <= {self._cfg.activate_cm:.0f} cm"
         )
         self._running = True
         self._thread = threading.Thread(target=self._poll, daemon=True)
@@ -100,9 +108,7 @@ class ProximityTrigger:
         self._running = False
         if self._thread is not None:
             self._thread.join(timeout=1)
-        if self._sensor is not None:
-            self._sensor.close()
-            self._sensor = None
+        self._close_sensor()
 
     def is_active(self) -> bool:
         return self._active
@@ -111,19 +117,45 @@ class ProximityTrigger:
     def last_distance_cm(self) -> float | None:
         return self._last_distance_cm
 
+    def _close_sensor(self) -> None:
+        if self._sensor is not None:
+            try:
+                self._sensor.close()
+            except Exception:
+                pass
+            self._sensor = None
+
+    def _handle_sensor_unavailable(self) -> None:
+        if self._cfg.fallback_on_error:
+            self._active = True
+            print(
+                "[Proximity] Sensor hazir degil; yuz tespiti surekli aktif "
+                "(fallback_on_error=True)."
+            )
+        else:
+            print(
+                "[Proximity] Sensor hazir degil; yuz tespiti kapali. "
+                "Kablolama kontrol edin veya --no-proximity kullanin."
+            )
+
     def _warmup_sensor(self) -> bool:
-        """HC-SR04 ilk okumada hata verebilir; birkac deneme yap."""
         assert self._sensor is not None
         ok_reads = 0
         for attempt in range(self._cfg.warmup_attempts):
+            time.sleep(self._cfg.min_read_interval_s)
             try:
-                time.sleep(self._cfg.min_read_interval_s)
-                dist = float(self._sensor.distance)
-                if 0.02 <= dist <= 2.0:
-                    ok_reads += 1
-                    self._last_distance_cm = dist * 100.0
+                dist = self._sensor.read_distance_m()
             except Exception as exc:
                 print(f"[Proximity] Isinma okumasi {attempt + 1}/{self._cfg.warmup_attempts}: {exc}")
+                continue
+            if dist is None:
+                print(
+                    f"[Proximity] Isinma okumasi {attempt + 1}/{self._cfg.warmup_attempts}: "
+                    "echo yok"
+                )
+                continue
+            ok_reads += 1
+            self._last_distance_cm = dist * 100.0
         return ok_reads >= 2
 
     def _enable_fallback(self) -> None:
@@ -142,7 +174,10 @@ class ProximityTrigger:
 
         while self._running:
             try:
-                dist = float(self._sensor.distance)
+                dist = self._sensor.read_distance_m() if self._sensor else None
+                if dist is None:
+                    raise RuntimeError("echo yok")
+
                 self._error_streak = 0
                 self._last_distance_cm = dist * 100.0
 
