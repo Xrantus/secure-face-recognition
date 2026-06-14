@@ -1,0 +1,121 @@
+[
+  {
+    "userId": null,
+    "accessType": "AUTHORIZED",
+    "details": "RPi cihazindan yuz tanima ile gecis",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:00:56.952727"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:1 (Skor: 0.153)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:02:44.737039"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:4 (Skor: 0.157)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:02:49.820559"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:5 (Skor: 0.208)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:02:50.025245"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:10 (Skor: 0.259)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:02:55.222132"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:11 (Skor: 0.172)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:02:55.295584"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:12 (Skor: 0.147)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:02:55.442494"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:19 (Skor: 0.223)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:03:00.387479"
+  },
+  {
+    "userId": null,
+    "accessType": "AUTHORIZED",
+    "details": "RPi cihazindan yuz tanima ile gecis",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:03:30.900762"
+  },
+  {
+    "userId": null,
+    "accessType": "AUTHORIZED",
+    "details": "RPi cihazindan yuz tanima ile gecis",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:03:38.522546"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:1 (Skor: 0.153)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:09:46.226187"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:4 (Skor: 0.157)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:09:51.301488"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:5 (Skor: 0.208)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:09:51.501409"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:10 (Skor: 0.259)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:09:56.684746"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:11 (Skor: 0.172)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:09:56.757714"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:12 (Skor: 0.147)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:09:56.913413"
+  },
+  {
+    "userId": null,
+    "accessType": "UNKNOWN",
+    "details": "RPi cihazindan taninmayan yuz algilandi track:19 (Skor: 0.223)",
+    "deviceId": "RPI_MAIN_DOOR",
+    "accessTime": "2026-06-14T18:10:01.890836"
+  }
+]

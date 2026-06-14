@@ -32,6 +32,7 @@ from .face_ui import (
     is_headless,
     show_frame,
     stop_rpi_preview,
+    DashboardRenderer,
 )
 from .main import resolve_model_path, resolve_video_path, crop_with_padding, metric_threshold
 
@@ -97,12 +98,14 @@ class LiveFaceRecognitionSystem:
             "names": np.array([])
         }
         
+        self.dashboard = DashboardRenderer(width=1280, height=720)
         self.access_log_policy = self._make_access_log_policy()
 
     def _make_access_log_policy(self) -> AccessLogPolicy:
         def on_authorized(user_id: str) -> None:
             print(f"[LOG] Gecis logu gonderiliyor: {user_id}")
             threading.Thread(target=send_access_log, args=(user_id,), daemon=True).start()
+            self.dashboard.add_log(user_id, "AUTHORIZED")
 
         def on_unknown(track_id: int, score: float | None) -> None:
             score_txt = f" (Skor: {score:.3f})" if score is not None else ""
@@ -112,6 +115,7 @@ class LiveFaceRecognitionSystem:
                 args=(score, track_id),
                 daemon=True,
             ).start()
+            self.dashboard.add_log("Unknown", "UNKNOWN", score)
 
         return AccessLogPolicy(on_authorized=on_authorized, on_unknown=on_unknown)
 
@@ -141,7 +145,7 @@ class LiveFaceRecognitionSystem:
             )
             if name != "Unknown":
                 print(f"[BASARILI] {name} tespit edildi! (Skor: {score:.3f})")
-            observations.append(FaceObservation(bbox=det.bbox, name=name, score=score))
+            observations.append(FaceObservation(bbox=det.bbox, name=name, score=score, roi=roi))
 
         return observations
 
@@ -229,6 +233,9 @@ class LiveFaceRecognitionSystem:
         while latest_frame is None and running:
             time.sleep(0.05)
 
+        # Initialize display mode
+        init_display(window_title=WINDOW_TITLE)
+
         print("Sistem Aktif! Penceriyi kapatmak icin 'q' tusuna basin.\n")
 
         frame_counter = 0
@@ -236,6 +243,7 @@ class LiveFaceRecognitionSystem:
         last_observations: list[FaceObservation] = []
         fps_t0 = time.time()
         fps_n = 0
+        display_fps = 0.0
 
         try:
             while running:
@@ -254,16 +262,41 @@ class LiveFaceRecognitionSystem:
                     last_observations = self._recognize_observations(frame, last_dets)
                     self.access_log_policy.update(last_observations, time.time())
 
+                    # Update the dashboard last recognized face card
+                    if last_observations:
+                        best_obs = None
+                        for obs in last_observations:
+                            if obs.name != "Unknown":
+                                best_obs = obs
+                                break
+                        if not best_obs:
+                            best_obs = last_observations[0]
+                        
+                        self.dashboard.update_face(
+                            name=best_obs.name,
+                            score=best_obs.score,
+                            crop=best_obs.roi,
+                            status="AUTHORIZED" if best_obs.name != "Unknown" else "UNKNOWN"
+                        )
+
                 self._draw_observations(frame, last_observations, self.metric)
 
                 now = time.time()
                 if now - fps_t0 >= 1.0:
-                    print(f"Anlik FPS: {fps_n / (now - fps_t0):.2f}")
+                    display_fps = fps_n / (now - fps_t0)
+                    print(f"Anlik FPS: {display_fps:.2f}")
                     fps_t0 = now
                     fps_n = 0
 
-                cv2.imshow("Mac Live + API", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
+                # Render full dashboard frame
+                dashboard_frame = self.dashboard.render(
+                    camera_frame=frame,
+                    fps=display_fps,
+                    proximity_active=True,
+                    proximity_dist=None
+                )
+
+                if not show_frame(dashboard_frame, WINDOW_TITLE):
                     running = False
                     break
 
@@ -350,6 +383,23 @@ class LiveFaceRecognitionSystem:
                             last_dets = self.detector.detect(frame)
                         last_observations = self._recognize_observations(frame, last_dets)
                     self.access_log_policy.update(last_observations, time.time())
+
+                    # Update the dashboard last recognized face card
+                    if last_observations:
+                        best_obs = None
+                        for obs in last_observations:
+                            if obs.name != "Unknown":
+                                best_obs = obs
+                                break
+                        if not best_obs:
+                            best_obs = last_observations[0]
+                        
+                        self.dashboard.update_face(
+                            name=best_obs.name,
+                            score=best_obs.score,
+                            crop=best_obs.roi,
+                            status="AUTHORIZED" if best_obs.name != "Unknown" else "UNKNOWN"
+                        )
                 else:
                     last_dets = []
                     last_observations = []
@@ -365,23 +415,15 @@ class LiveFaceRecognitionSystem:
                     fps_t0 = now
                     fps_n = 0
 
-                if not is_headless():
-                    dist_cm = proximity.last_distance_cm
-                    dist_txt = f"{dist_cm:.0f} cm" if dist_cm is not None else "--"
-                    det_state = (
-                        "AKTIF"
-                        if proximity.is_active()
-                        else "BEKLEMEDE (yakinlik)"
-                    )
-                    draw_status_hud(
-                        frame,
-                        [
-                            f"Yuz tespiti: {det_state} | Mesafe: {dist_txt}",
-                            f"FPS: {display_fps:.1f} | Yuz: {len(last_observations)}",
-                        ],
-                    )
+                # Render full dashboard frame
+                dashboard_frame = self.dashboard.render(
+                    camera_frame=frame,
+                    fps=display_fps,
+                    proximity_active=proximity.is_active(),
+                    proximity_dist=proximity.last_distance_cm
+                )
 
-                if not show_frame(frame, WINDOW_TITLE, picam=picam):
+                if not show_frame(dashboard_frame, WINDOW_TITLE, picam=picam):
                     running = False
                     break
 
@@ -407,9 +449,14 @@ class LiveFaceRecognitionSystem:
         print(f"Video modu aktif: {video_path}")
         print("Cikmak icin 'q' tusuna basin.\n")
 
+        # Initialize display mode
+        init_display(window_title=WINDOW_TITLE)
+
         fps_t0 = time.time()
         fps_n = 0
         frame_counter = 0
+        display_fps = 0.0
+        last_observations: list[FaceObservation] = []
 
         try:
             while True:
@@ -420,48 +467,48 @@ class LiveFaceRecognitionSystem:
                 frame = cv2.flip(frame, 1)
                 fps_n += 1
 
-                if frame_counter % config.MODEL_CONFIG.frame_skip == 0:
+                ran_detection = frame_counter % config.MODEL_CONFIG.frame_skip == 0
+                if ran_detection:
                     with self.inference_lock:
                         dets = self.detector.detect(frame)
-                else:
-                    dets = []
+                    last_observations = self._recognize_observations(frame, dets)
+                    self.access_log_policy.update(last_observations, time.time())
 
-                for det in dets:
-                    roi = crop_with_padding(frame, det.bbox, config.MODEL_CONFIG.landmark_pad)
-                    if roi is None:
-                        continue
+                    # Update the dashboard last recognized face card
+                    if last_observations:
+                        best_obs = None
+                        for obs in last_observations:
+                            if obs.name != "Unknown":
+                                best_obs = obs
+                                break
+                        if not best_obs:
+                            best_obs = last_observations[0]
+                        
+                        self.dashboard.update_face(
+                            name=best_obs.name,
+                            score=best_obs.score,
+                            crop=best_obs.roi,
+                            status="AUTHORIZED" if best_obs.name != "Unknown" else "UNKNOWN"
+                        )
 
-                    with self.inference_lock:
-                        emb = self.recognizer.embed_from_roi(roi)
-                    if emb is None:
-                        continue
-
-                    with self.db_lock:
-                        curr_embs = self.db_state["embs"]
-                        curr_names = self.db_state["names"]
-
-                    name, score = FaceRecognizer.predict_identity(
-                        emb=emb,
-                        db_embs=curr_embs,
-                        db_names=curr_names,
-                        metric=self.metric,
-                        threshold=self.threshold,
-                    )
-                    color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
-                    label = f"{name} {score:.2f}" if self.metric == "cosine" else f"{name} {score:.3f}"
-
-                    x1, y1, x2, y2 = det.bbox
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                    cv2.putText(frame, label, (x1, max(0, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                self._draw_observations(frame, last_observations, self.metric)
 
                 now = time.time()
                 if now - fps_t0 >= 1.0:
-                    print(f"Anlik FPS: {fps_n / (now - fps_t0):.2f}")
+                    display_fps = fps_n / (now - fps_t0)
+                    print(f"Anlik FPS: {display_fps:.2f}")
                     fps_t0 = now
                     fps_n = 0
 
-                cv2.imshow("Video + API", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
+                # Render full dashboard frame
+                dashboard_frame = self.dashboard.render(
+                    camera_frame=frame,
+                    fps=display_fps,
+                    proximity_active=True,
+                    proximity_dist=None
+                )
+
+                if not show_frame(dashboard_frame, WINDOW_TITLE):
                     break
 
                 frame_counter += 1

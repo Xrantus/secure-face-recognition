@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable
+import numpy as np
 
 
 BBox = tuple[int, int, int, int]
@@ -14,6 +15,7 @@ class FaceObservation:
     bbox: BBox
     name: str
     score: float
+    roi: np.ndarray | None = None
 
 
 @dataclass
