@@ -114,10 +114,15 @@ class LiveFaceRecognitionSystem:
         self.access_log_policy = self._make_access_log_policy()
 
     def _make_access_log_policy(self) -> AccessLogPolicy:
-        def on_authorized(user_id: str) -> None:
-            print(f"[LOG] Gecis logu gonderiliyor: {user_id}")
-            threading.Thread(target=send_access_log, args=(user_id,), daemon=True).start()
-            self.dashboard.add_log(user_id, "AUTHORIZED")
+        def on_authorized(user_id_combined: str) -> None:
+            # Parse user_id_combined which is "userId:userName"
+            parts = user_id_combined.split(":")
+            actual_id = parts[0]
+            display_name = parts[1] if len(parts) > 1 else parts[0]
+
+            print(f"[LOG] Gecis logu gonderiliyor: {display_name} (ID: {actual_id})")
+            threading.Thread(target=send_access_log, args=(actual_id,), daemon=True).start()
+            self.dashboard.add_log(display_name, "AUTHORIZED")
 
         def on_unknown(track_id: int, score: float | None) -> None:
             score_txt = f" (Skor: {score:.3f})" if score is not None else ""
@@ -164,7 +169,9 @@ class LiveFaceRecognitionSystem:
     @staticmethod
     def _draw_observations(frame: np.ndarray, observations: list[FaceObservation], metric: SimilarityMetric) -> None:
         for obs in observations:
-            draw_face_label(frame, obs.bbox, obs.name, obs.score, metric)
+            parts = obs.name.split(":")
+            display_name = parts[1] if len(parts) > 1 else parts[0]
+            draw_face_label(frame, obs.bbox, display_name, obs.score, metric)
 
     def fetch_and_reload_db(self) -> None:
         """Fetch new embeddings from Backend and update db_state in memory."""
@@ -284,8 +291,12 @@ class LiveFaceRecognitionSystem:
                         if not best_obs:
                             best_obs = last_observations[0]
                         
+                        # Split name for display
+                        parts = best_obs.name.split(":")
+                        display_name = parts[1] if len(parts) > 1 else parts[0]
+
                         self.dashboard.update_face(
-                            name=best_obs.name,
+                            name=display_name,
                             score=best_obs.score,
                             crop=best_obs.roi,
                             status="AUTHORIZED" if best_obs.name != "Unknown" else "UNKNOWN"
@@ -406,8 +417,12 @@ class LiveFaceRecognitionSystem:
                         if not best_obs:
                             best_obs = last_observations[0]
                         
+                        # Split name for display
+                        parts = best_obs.name.split(":")
+                        display_name = parts[1] if len(parts) > 1 else parts[0]
+
                         self.dashboard.update_face(
-                            name=best_obs.name,
+                            name=display_name,
                             score=best_obs.score,
                             crop=best_obs.roi,
                             status="AUTHORIZED" if best_obs.name != "Unknown" else "UNKNOWN"
@@ -496,8 +511,12 @@ class LiveFaceRecognitionSystem:
                         if not best_obs:
                             best_obs = last_observations[0]
                         
+                        # Split name for display
+                        parts = best_obs.name.split(":")
+                        display_name = parts[1] if len(parts) > 1 else parts[0]
+
                         self.dashboard.update_face(
-                            name=best_obs.name,
+                            name=display_name,
                             score=best_obs.score,
                             crop=best_obs.roi,
                             status="AUTHORIZED" if best_obs.name != "Unknown" else "UNKNOWN"

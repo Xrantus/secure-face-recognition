@@ -49,10 +49,12 @@ def fetch_and_save_embeddings(db_abs: str) -> tuple[np.ndarray, np.ndarray] | No
         for item in data:
             # Backend'in dondurdugu DTO: EmbeddingDTO {id, userId, userName, photoId, embedding, dimension}
             person_id = str(item.get("userId", "Unknown"))
+            user_name = str(item.get("userName", "Unknown"))
             emb_vector = item.get("embedding", [])
             
             if len(emb_vector) > 0:
-                new_names.append(person_id)
+                combined_name = f"{person_id}:{user_name}"
+                new_names.append(combined_name)
                 new_embs.append(np.array(emb_vector, dtype=np.float32))
                 unique_user_ids.add(person_id)
                 
