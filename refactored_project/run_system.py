@@ -33,6 +33,7 @@ from .face_ui import (
     show_frame,
     stop_rpi_preview,
     DashboardRenderer,
+    get_screen_resolution,
 )
 from .main import resolve_model_path, resolve_video_path, crop_with_padding, metric_threshold
 
@@ -97,8 +98,19 @@ class LiveFaceRecognitionSystem:
             "embs": np.array([]),
             "names": np.array([])
         }
-        
-        self.dashboard = DashboardRenderer(width=1280, height=720)
+        # Determine screen resolution based on hardware environment
+        if hardware_env == "RPI":
+            screen_res = get_screen_resolution()
+            if screen_res:
+                self.screen_w, self.screen_h = screen_res
+                print(f"[SISTEM] Raspberry Pi ekran cozunurlugu algilandi: {self.screen_w}x{self.screen_h}")
+            else:
+                self.screen_w, self.screen_h = (1920, 1080)
+                print(f"[SISTEM] Raspberry Pi ekran cozunurlugu algilanamadi, varsayilan kullaniliyor: 1920x1080")
+        else:
+            self.screen_w, self.screen_h = (1280, 720)
+
+        self.dashboard = DashboardRenderer(width=self.screen_w, height=self.screen_h)
         self.access_log_policy = self._make_access_log_policy()
 
     def _make_access_log_policy(self) -> AccessLogPolicy:
@@ -234,7 +246,7 @@ class LiveFaceRecognitionSystem:
             time.sleep(0.05)
 
         # Initialize display mode
-        init_display(window_title=WINDOW_TITLE)
+        init_display(window_title=WINDOW_TITLE, width=self.screen_w, height=self.screen_h)
 
         print("Sistem Aktif! Penceriyi kapatmak icin 'q' tusuna basin.\n")
 
@@ -330,10 +342,10 @@ class LiveFaceRecognitionSystem:
                     break
 
         picam = Picamera2()
-        cfg = picam.create_preview_configuration({"size": config.CAMERA_CONFIG.rpi_preview_size})
+        cfg = picam.create_preview_configuration({"size": (self.screen_w, self.screen_h)})
         picam.configure(cfg)
         # Preview, picam.start() oncesinde acilmali (aksi halde event loop catismasi).
-        init_display(picam)
+        init_display(picam, width=self.screen_w, height=self.screen_h)
         picam.start()
 
         t = threading.Thread(target=reader, args=(picam,), daemon=True)
@@ -450,7 +462,7 @@ class LiveFaceRecognitionSystem:
         print("Cikmak icin 'q' tusuna basin.\n")
 
         # Initialize display mode
-        init_display(window_title=WINDOW_TITLE)
+        init_display(window_title=WINDOW_TITLE, width=self.screen_w, height=self.screen_h)
 
         fps_t0 = time.time()
         fps_n = 0
