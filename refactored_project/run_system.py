@@ -54,6 +54,23 @@ def resolve_hardware_env(requested: Literal["MAC", "RPI", "WIN"], explicit: bool
     return requested
 
 
+def parse_combined_name(combined_name: str) -> tuple[str, str, str]:
+    """Parse name from DB returning (person_id, display_name, status)."""
+    if combined_name == "Unknown":
+        return "Unknown", "Unknown", "UNKNOWN"
+    parts = combined_name.split(":")
+    person_id = parts[0]
+    display_name = parts[1] if len(parts) > 1 else parts[0]
+    raw_status = parts[2].upper() if len(parts) > 2 else "AUTHORIZED"
+    
+    if raw_status in ("BLACKLIST", "BLACKLISTED", "RESTRICTED", "DENIED", "UNAUTHORIZED"):
+        status = "DENIED"
+    else:
+        status = "AUTHORIZED"
+        
+    return person_id, display_name, status
+
+
 class LiveFaceRecognitionSystem:
     def __init__(
         self,
@@ -115,14 +132,17 @@ class LiveFaceRecognitionSystem:
 
     def _make_access_log_policy(self) -> AccessLogPolicy:
         def on_authorized(user_id_combined: str) -> None:
-            # Parse user_id_combined which is "userId:userName"
-            parts = user_id_combined.split(":")
-            actual_id = parts[0]
-            display_name = parts[1] if len(parts) > 1 else parts[0]
+            # Parse user_id_combined which is "userId:userName:status" or "userId:userName"
+            actual_id, display_name, status = parse_combined_name(user_id_combined)
 
-            print(f"[LOG] Gecis logu gonderiliyor: {display_name} (ID: {actual_id})")
-            threading.Thread(target=send_access_log, args=(actual_id,), daemon=True).start()
-            self.dashboard.add_log(display_name, "AUTHORIZED")
+            if status == "DENIED":
+                print(f"[LOG] Yasakli/Engellenmis gecis logu gonderiliyor: {display_name} (ID: {actual_id})")
+                threading.Thread(target=send_access_log, args=(actual_id, "DENIED"), daemon=True).start()
+                self.dashboard.add_log(display_name, "DENIED")
+            else:
+                print(f"[LOG] Gecis logu gonderiliyor: {display_name} (ID: {actual_id})")
+                threading.Thread(target=send_access_log, args=(actual_id, "AUTHORIZED"), daemon=True).start()
+                self.dashboard.add_log(display_name, "AUTHORIZED")
 
         def on_unknown(track_id: int, score: float | None) -> None:
             score_txt = f" (Skor: {score:.3f})" if score is not None else ""
@@ -169,9 +189,8 @@ class LiveFaceRecognitionSystem:
     @staticmethod
     def _draw_observations(frame: np.ndarray, observations: list[FaceObservation], metric: SimilarityMetric) -> None:
         for obs in observations:
-            parts = obs.name.split(":")
-            display_name = parts[1] if len(parts) > 1 else parts[0]
-            draw_face_label(frame, obs.bbox, display_name, obs.score, metric)
+            _, display_name, status = parse_combined_name(obs.name)
+            draw_face_label(frame, obs.bbox, display_name, obs.score, metric, status=status)
 
     def fetch_and_reload_db(self) -> None:
         """Fetch new embeddings from Backend and update db_state in memory."""
@@ -292,14 +311,13 @@ class LiveFaceRecognitionSystem:
                             best_obs = last_observations[0]
                         
                         # Split name for display
-                        parts = best_obs.name.split(":")
-                        display_name = parts[1] if len(parts) > 1 else parts[0]
+                        _, display_name, status = parse_combined_name(best_obs.name)
 
                         self.dashboard.update_face(
                             name=display_name,
                             score=best_obs.score,
                             crop=best_obs.roi,
-                            status="AUTHORIZED" if best_obs.name != "Unknown" else "UNKNOWN"
+                            status=status
                         )
 
                 self._draw_observations(frame, last_observations, self.metric)
@@ -418,14 +436,13 @@ class LiveFaceRecognitionSystem:
                             best_obs = last_observations[0]
                         
                         # Split name for display
-                        parts = best_obs.name.split(":")
-                        display_name = parts[1] if len(parts) > 1 else parts[0]
+                        _, display_name, status = parse_combined_name(best_obs.name)
 
                         self.dashboard.update_face(
                             name=display_name,
                             score=best_obs.score,
                             crop=best_obs.roi,
-                            status="AUTHORIZED" if best_obs.name != "Unknown" else "UNKNOWN"
+                            status=status
                         )
                 else:
                     last_dets = []
@@ -512,14 +529,13 @@ class LiveFaceRecognitionSystem:
                             best_obs = last_observations[0]
                         
                         # Split name for display
-                        parts = best_obs.name.split(":")
-                        display_name = parts[1] if len(parts) > 1 else parts[0]
+                        _, display_name, status = parse_combined_name(best_obs.name)
 
                         self.dashboard.update_face(
                             name=display_name,
                             score=best_obs.score,
                             crop=best_obs.roi,
-                            status="AUTHORIZED" if best_obs.name != "Unknown" else "UNKNOWN"
+                            status=status
                         )
 
                 self._draw_observations(frame, last_observations, self.metric)

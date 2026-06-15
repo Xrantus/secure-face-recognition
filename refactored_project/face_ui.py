@@ -25,9 +25,15 @@ def draw_face_label(
     name: str,
     score: float,
     metric: SimilarityMetric,
+    status: str = "AUTHORIZED",
 ) -> None:
     """Draw bounding box and identity label on frame."""
-    color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
+    if status == "DENIED":
+        color = (0, 0, 255)       # Red BGR
+    elif status == "UNKNOWN" or name == "Unknown":
+        color = (0, 255, 255)     # Yellow BGR
+    else:
+        color = (0, 255, 0)       # Green BGR
     label = f"{name} {score:.2f}" if metric == "cosine" else f"{name} {score:.3f}"
     x1, y1, x2, y2 = bbox
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
@@ -550,7 +556,14 @@ class DashboardRenderer:
                 canvas[crop_y:crop_y+crop_size, crop_x:crop_x+crop_size] = resized_crop
                 
                 # Corner brackets around face crop
-                color_theme = (90, 220, 90) if self.last_status == "AUTHORIZED" else (90, 90, 220)
+                if self.last_status == "AUTHORIZED":
+                    color_theme = (90, 220, 90)  # Green
+                elif self.last_status == "DENIED":
+                    color_theme = (0, 0, 255)    # Red
+                elif self.last_status == "UNKNOWN":
+                    color_theme = (0, 255, 255)  # Yellow
+                else:
+                    color_theme = (0, 165, 255)  # Amber
                 l_len = int(15 * scale_factor)
                 bracket_thickness = max(1, int(2 * scale_factor))
                 # Top-left
@@ -616,7 +629,14 @@ class DashboardRenderer:
             )
             
             # Status Badge Text
-            status_color = (90, 220, 90) if self.last_status == "AUTHORIZED" else ((90, 90, 220) if self.last_status == "UNKNOWN" else (0, 165, 255))
+            if self.last_status == "AUTHORIZED":
+                status_color = (90, 220, 90)  # Green
+            elif self.last_status == "DENIED":
+                status_color = (0, 0, 255)    # Red
+            elif self.last_status == "UNKNOWN":
+                status_color = (0, 255, 255)  # Yellow
+            else:
+                status_color = (0, 165, 255)  # Amber
             status_thickness = max(1, int(2 * scale_factor))
             cv2.putText(
                 canvas,
@@ -692,7 +712,14 @@ class DashboardRenderer:
                              (50, 42, 42), 1)
                 
                 # Badge color
-                badge_color = (90, 220, 90) if log["status"] == "AUTHORIZED" else (90, 90, 220)
+                if log["status"] == "AUTHORIZED":
+                    badge_color = (90, 220, 90)  # Green
+                elif log["status"] == "DENIED":
+                    badge_color = (0, 0, 255)    # Red
+                elif log["status"] == "UNKNOWN":
+                    badge_color = (0, 255, 255)  # Yellow
+                else:
+                    badge_color = (0, 165, 255)  # Amber
                 # Pulse outer circle
                 cv2.circle(canvas, (right_x + int(30 * scale_factor), y_offset - int(5 * scale_factor)), int(6 * scale_factor), badge_color, -1, cv2.LINE_AA)
                 
@@ -721,7 +748,12 @@ class DashboardRenderer:
                 )
                 
                 # Status tag text
-                status_lbl = "OK" if log["status"] == "AUTHORIZED" else "UNKNOWN"
+                if log["status"] == "AUTHORIZED":
+                    status_lbl = "OK"
+                elif log["status"] == "DENIED":
+                    status_lbl = "DENIED"
+                else:
+                    status_lbl = "UNKNOWN"
                 status_lbl_scale = 0.42 * scale_factor
                 cv2.putText(
                     canvas,

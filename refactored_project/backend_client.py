@@ -52,8 +52,28 @@ def fetch_and_save_embeddings(db_abs: str) -> tuple[np.ndarray, np.ndarray] | No
             user_name = str(item.get("userName", "Unknown"))
             emb_vector = item.get("embedding", [])
             
+            # Extract user status/role to determine if blacklisted
+            user_status = None
+            for key in ("userStatus", "status", "userRole", "role"):
+                val = item.get(key)
+                if val:
+                    user_status = val
+                    break
+            if not user_status:
+                user_obj = item.get("user")
+                if isinstance(user_obj, dict):
+                    for key in ("status", "userStatus", "role", "userRole"):
+                        val = user_obj.get(key)
+                        if val:
+                            user_status = val
+                            break
+            if not user_status:
+                user_status = "AUTHORIZED"
+            
+            user_status = str(user_status).upper()
+            
             if len(emb_vector) > 0:
-                combined_name = f"{person_id}:{user_name}"
+                combined_name = f"{person_id}:{user_name}:{user_status}"
                 new_names.append(combined_name)
                 new_embs.append(np.array(emb_vector, dtype=np.float32))
                 unique_user_ids.add(person_id)
@@ -77,7 +97,7 @@ def fetch_and_save_embeddings(db_abs: str) -> tuple[np.ndarray, np.ndarray] | No
         return None
 
 
-def send_access_log(person_id: str) -> None:
+def send_access_log(person_id: str, access_type: str = "AUTHORIZED") -> None:
     """
     Sends an instant access log to the backend. 
     If offline, saves it locally.
@@ -85,8 +105,8 @@ def send_access_log(person_id: str) -> None:
     url = f"{BACKEND_BASE_URL}/api/access-logs"
     payload = {
         "userId": int(person_id) if person_id.isdigit() else None,
-        "accessType": "AUTHORIZED", # RPi'den gecenler onayli sayilir (ya da is mantiginiza gore degistirin)
-        "details": f"RPi cihazindan yuz tanima ile gecis",
+        "accessType": access_type, 
+        "details": f"RPi cihazindan yuz tanima ile gecis ({access_type})",
         "deviceId": "RPI_MAIN_DOOR",
         "accessTime": _get_current_time_iso()
     }
