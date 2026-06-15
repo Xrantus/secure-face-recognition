@@ -36,6 +36,17 @@ def list_type_ui_style(list_type: str) -> tuple[tuple[int, int, int], str]:
     return (0, 255, 255), "UNKNOWN"
 
 
+def access_status_ui_style(status: str) -> tuple[tuple[int, int, int], str]:
+    """Return (BGR color, label) for access log history entries."""
+    if status == "DENIED":
+        return (0, 0, 255), "DENIED"
+    if status == "AUTHORIZED":
+        return (0, 255, 0), "AUTHORIZED"
+    if status == "UNKNOWN":
+        return (0, 255, 255), "UNKNOWN"
+    return (0, 165, 255), status
+
+
 _gui_warned = False
 _rpi_preview_mode: str | None = None
 _display_mode: str = "unknown"  # "rpi" | "opencv" | "headless"
@@ -50,9 +61,8 @@ def draw_face_label(
     list_type: str = "WHITE_LIST",
 ) -> None:
     """Draw bounding box and identity label on frame."""
-    color, status_label = list_type_ui_style(list_type)
-    score_txt = f"{score:.2f}" if metric == "cosine" else f"{score:.3f}"
-    label = f"{name} - {status_label} {score_txt}"
+    color, _ = list_type_ui_style(list_type)
+    label = name
     x1, y1, x2, y2 = bbox
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
     cv2.putText(
@@ -715,15 +725,7 @@ class DashboardRenderer:
                              (right_x + card_w - int(20 * scale_factor), y_offset - int(25 * scale_factor)), 
                              (50, 42, 42), 1)
                 
-                # Badge color
-                if log["status"] == "AUTHORIZED":
-                    badge_color = (90, 220, 90)  # Green
-                elif log["status"] == "DENIED":
-                    badge_color = (0, 0, 255)    # Red
-                elif log["status"] == "UNKNOWN":
-                    badge_color = (0, 255, 255)  # Yellow
-                else:
-                    badge_color = (0, 165, 255)  # Amber
+                badge_color, status_lbl = access_status_ui_style(log["status"])
                 # Pulse outer circle
                 cv2.circle(canvas, (right_x + int(30 * scale_factor), y_offset - int(5 * scale_factor)), int(6 * scale_factor), badge_color, -1, cv2.LINE_AA)
                 
@@ -751,13 +753,6 @@ class DashboardRenderer:
                     cv2.LINE_AA
                 )
                 
-                # Status tag text
-                if log["status"] == "AUTHORIZED":
-                    status_lbl = "OK"
-                elif log["status"] == "DENIED":
-                    status_lbl = "DENIED"
-                else:
-                    status_lbl = "UNKNOWN"
                 status_lbl_scale = 0.42 * scale_factor
                 cv2.putText(
                     canvas,

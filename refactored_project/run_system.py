@@ -31,6 +31,7 @@ from .face_ui import (
     init_display,
     is_headless,
     parse_list_type,
+    list_type_ui_style,
     show_frame,
     stop_rpi_preview,
     DashboardRenderer,
@@ -133,17 +134,16 @@ class LiveFaceRecognitionSystem:
 
     def _make_access_log_policy(self) -> AccessLogPolicy:
         def on_authorized(user_id_combined: str) -> None:
-            # Parse user_id_combined which is "userId:userName:status" or "userId:userName"
             actual_id, display_name, status = parse_combined_name(user_id_combined)
+            _, ui_status = list_type_ui_style(parse_list_type(user_id_combined))
 
             if status == "DENIED":
                 print(f"[LOG] Yasakli/Engellenmis gecis logu gonderiliyor: {display_name} (ID: {actual_id})")
                 threading.Thread(target=send_access_log, args=(actual_id, "DENIED"), daemon=True).start()
-                self.dashboard.add_log(display_name, "DENIED")
             else:
                 print(f"[LOG] Gecis logu gonderiliyor: {display_name} (ID: {actual_id})")
                 threading.Thread(target=send_access_log, args=(actual_id, "AUTHORIZED"), daemon=True).start()
-                self.dashboard.add_log(display_name, "AUTHORIZED")
+            self.dashboard.add_log(display_name, ui_status)
 
         def on_unknown(track_id: int, score: float | None) -> None:
             score_txt = f" (Skor: {score:.3f})" if score is not None else ""
@@ -182,7 +182,9 @@ class LiveFaceRecognitionSystem:
                 threshold=self.threshold,
             )
             if name != "Unknown":
-                print(f"[BASARILI] {name} tespit edildi! (Skor: {score:.3f})")
+                _, display_name, _ = parse_combined_name(name)
+                _, status_label = list_type_ui_style(parse_list_type(name))
+                print(f"[BASARILI] {display_name} ({status_label}) tespit edildi! (Skor: {score:.3f})")
             observations.append(FaceObservation(bbox=det.bbox, name=name, score=score, roi=roi))
 
         return observations
