@@ -73,7 +73,8 @@ def fetch_and_save_embeddings(db_abs: str) -> tuple[np.ndarray, np.ndarray] | No
             user_status = str(user_status).upper()
             
             if len(emb_vector) > 0:
-                combined_name = f"{person_id}:{user_name}:{user_status}"
+                list_type = str(item.get("listType", "WHITE_LIST")).upper()
+                combined_name = f"{person_id}:{user_name}:{user_status}:{list_type}"
                 new_names.append(combined_name)
                 new_embs.append(np.array(emb_vector, dtype=np.float32))
                 unique_user_ids.add(person_id)

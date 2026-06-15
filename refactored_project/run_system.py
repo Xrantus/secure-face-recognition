@@ -30,6 +30,7 @@ from .face_ui import (
     draw_status_hud,
     init_display,
     is_headless,
+    parse_list_type,
     show_frame,
     stop_rpi_preview,
     DashboardRenderer,
@@ -189,8 +190,8 @@ class LiveFaceRecognitionSystem:
     @staticmethod
     def _draw_observations(frame: np.ndarray, observations: list[FaceObservation], metric: SimilarityMetric) -> None:
         for obs in observations:
-            _, display_name, status = parse_combined_name(obs.name)
-            draw_face_label(frame, obs.bbox, display_name, obs.score, metric, status=status)
+            _, display_name, _ = parse_combined_name(obs.name)
+            draw_face_label(frame, obs.bbox, display_name, obs.score, metric, list_type=parse_list_type(obs.name))
 
     def fetch_and_reload_db(self) -> None:
         """Fetch new embeddings from Backend and update db_state in memory."""
@@ -311,13 +312,13 @@ class LiveFaceRecognitionSystem:
                             best_obs = last_observations[0]
                         
                         # Split name for display
-                        _, display_name, status = parse_combined_name(best_obs.name)
+                        _, display_name, _ = parse_combined_name(best_obs.name)
 
                         self.dashboard.update_face(
                             name=display_name,
                             score=best_obs.score,
                             crop=best_obs.roi,
-                            status=status
+                            list_type=parse_list_type(best_obs.name),
                         )
 
                 self._draw_observations(frame, last_observations, self.metric)
@@ -436,13 +437,13 @@ class LiveFaceRecognitionSystem:
                             best_obs = last_observations[0]
                         
                         # Split name for display
-                        _, display_name, status = parse_combined_name(best_obs.name)
+                        _, display_name, _ = parse_combined_name(best_obs.name)
 
                         self.dashboard.update_face(
                             name=display_name,
                             score=best_obs.score,
                             crop=best_obs.roi,
-                            status=status
+                            list_type=parse_list_type(best_obs.name),
                         )
                 else:
                     last_dets = []
@@ -529,13 +530,13 @@ class LiveFaceRecognitionSystem:
                             best_obs = last_observations[0]
                         
                         # Split name for display
-                        _, display_name, status = parse_combined_name(best_obs.name)
+                        _, display_name, _ = parse_combined_name(best_obs.name)
 
                         self.dashboard.update_face(
                             name=display_name,
                             score=best_obs.score,
                             crop=best_obs.roi,
-                            status=status
+                            list_type=parse_list_type(best_obs.name),
                         )
 
                 self._draw_observations(frame, last_observations, self.metric)

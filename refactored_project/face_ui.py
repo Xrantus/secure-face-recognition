@@ -14,6 +14,28 @@ from .face_recognizer import SimilarityMetric
 
 WINDOW_TITLE = "Face Recognition (YOLO + InsightFace)"
 
+
+def parse_list_type(combined_name: str) -> str:
+    """Extract listType from DB name (userId:userName:status:listType). UI-only."""
+    if combined_name == "Unknown":
+        return "UNKNOWN"
+    parts = combined_name.split(":")
+    if len(parts) > 3:
+        return parts[3].upper()
+    return "WHITE_LIST"
+
+
+def list_type_ui_style(list_type: str) -> tuple[tuple[int, int, int], str]:
+    """Return (BGR color, status label) for listType-based UI rendering."""
+    if list_type == "BLACK_LIST":
+        return (0, 0, 255), "DENIED"
+    if list_type == "WHITE_LIST":
+        return (0, 255, 0), "AUTHORIZED"
+    if list_type == "WAITING":
+        return (0, 165, 255), "WAITING"
+    return (0, 255, 255), "UNKNOWN"
+
+
 _gui_warned = False
 _rpi_preview_mode: str | None = None
 _display_mode: str = "unknown"  # "rpi" | "opencv" | "headless"
@@ -25,16 +47,12 @@ def draw_face_label(
     name: str,
     score: float,
     metric: SimilarityMetric,
-    status: str = "AUTHORIZED",
+    list_type: str = "WHITE_LIST",
 ) -> None:
     """Draw bounding box and identity label on frame."""
-    if status == "DENIED":
-        color = (0, 0, 255)       # Red BGR
-    elif status == "UNKNOWN" or name == "Unknown":
-        color = (0, 255, 255)     # Yellow BGR
-    else:
-        color = (0, 255, 0)       # Green BGR
-    label = f"{name} {score:.2f}" if metric == "cosine" else f"{name} {score:.3f}"
+    color, status_label = list_type_ui_style(list_type)
+    score_txt = f"{score:.2f}" if metric == "cosine" else f"{score:.3f}"
+    label = f"{name} - {status_label} {score_txt}"
     x1, y1, x2, y2 = bbox
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
     cv2.putText(
@@ -348,13 +366,13 @@ class DashboardRenderer:
         self.last_score = 0.0
         self.last_crop = None
         self.last_time = "--:--:--"
-        self.last_status = "WAITING"
+        self.last_list_type = "WAITING"
 
         # Log history (list of dicts)
         # Each dict: {"time": str, "name": str, "status": str, "score": float}
         self.logs = []
 
-    def update_face(self, name: str, score: float, crop: np.ndarray | None, status: str) -> None:
+    def update_face(self, name: str, score: float, crop: np.ndarray | None, list_type: str) -> None:
         """Update details of the last detected person."""
         with self.lock:
             self.last_name = name
@@ -363,7 +381,7 @@ class DashboardRenderer:
                 self.last_crop = crop.copy()
             else:
                 self.last_crop = None
-            self.last_status = status
+            self.last_list_type = list_type
             self.last_time = datetime.now().strftime("%H:%M:%S")
 
     def add_log(self, name: str, status: str, score: float | None = None) -> None:
@@ -556,14 +574,7 @@ class DashboardRenderer:
                 canvas[crop_y:crop_y+crop_size, crop_x:crop_x+crop_size] = resized_crop
                 
                 # Corner brackets around face crop
-                if self.last_status == "AUTHORIZED":
-                    color_theme = (90, 220, 90)  # Green
-                elif self.last_status == "DENIED":
-                    color_theme = (0, 0, 255)    # Red
-                elif self.last_status == "UNKNOWN":
-                    color_theme = (0, 255, 255)  # Yellow
-                else:
-                    color_theme = (0, 165, 255)  # Amber
+                color_theme, _ = list_type_ui_style(self.last_list_type)
                 l_len = int(15 * scale_factor)
                 bracket_thickness = max(1, int(2 * scale_factor))
                 # Top-left
@@ -628,19 +639,12 @@ class DashboardRenderer:
                 cv2.LINE_AA
             )
             
-            # Status Badge Text
-            if self.last_status == "AUTHORIZED":
-                status_color = (90, 220, 90)  # Green
-            elif self.last_status == "DENIED":
-                status_color = (0, 0, 255)    # Red
-            elif self.last_status == "UNKNOWN":
-                status_color = (0, 255, 255)  # Yellow
-            else:
-                status_color = (0, 165, 255)  # Amber
+            # Status Badge Text (listType-based, UI only)
+            status_color, status_label = list_type_ui_style(self.last_list_type)
             status_thickness = max(1, int(2 * scale_factor))
             cv2.putText(
                 canvas,
-                f"STATUS: {self.last_status}",
+                f"STATUS: {status_label}",
                 (text_x, card1_y + int(125 * scale_factor)),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 details_font_scale,
@@ -650,7 +654,7 @@ class DashboardRenderer:
             )
             
             # Score
-            score_str = f"SCORE: {self.last_score:.2f}" if self.last_status != "WAITING" else "SCORE: --"
+            score_str = f"SCORE: {self.last_score:.2f}" if self.last_list_type != "WAITING" else "SCORE: --"
             cv2.putText(
                 canvas,
                 score_str,
