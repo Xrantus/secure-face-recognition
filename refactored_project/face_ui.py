@@ -425,7 +425,7 @@ class DashboardRenderer:
         title_thickness = max(1, int(2 * scale_factor))
         cv2.putText(
             canvas,
-            "AI SURVEILLANCE & ACCESS MONITOR",
+            "SecureFace",
             (header_x1 + int(20 * scale_factor), header_y1 + int(header_h * 0.62)),
             cv2.FONT_HERSHEY_SIMPLEX,
             title_font_scale,
