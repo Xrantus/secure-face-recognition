@@ -1,0 +1,114 @@
+# THESIS PROJECT FACE DETECTION MODEL (YOLO) BENCHMARK RESULTS
+
+Date: April 30, 2026
+Test Environments:
+1. PC (CPU Inference - ONNX Runtime)
+2. Raspberry Pi 5 (CPU Inference - ONNX Runtime)
+
+Reference Model (Ground Truth): face_yolo11n.onnx (FP32/FP16)
+Target Model under Evaluation: face_yolo11n_int8.onnx (INT8 Quantized)
+
+---
+
+## SECTION 1: PERSONAL COMPUTER (PC) TEST RESULTS
+
+### VIDEO 1: face-demographics-walking.mp4
+==================================================
+                  BENCHMARK METRICS
+==================================================
+  Total Real Faces (Ground Truth): 503
+  Total Predictions (INT8):        514
+  True Positive (TP):              501
+  False Positive (FP):             13
+  False Negative (FN):             2
+--------------------------------------------------
+  Precision:                       97.47 %
+  Recall:                          99.60 %
+  F1-Score:                        98.53 %
+  mAP@0.5:                         99.97 %
+--------------------------------------------------
+                   SPEED COMPARISON
+--------------------------------------------------
+  Baseline Model Average FPS:      8.1 FPS
+  INT8 Model Average FPS:          8.8 FPS
+  Speed Improvement:               1.1x Faster
+==================================================
+
+
+### VIDEO 2: face-demographics-walking-and-pause.mp4
+==================================================
+                  BENCHMARK METRICS
+==================================================
+  Total Real Faces (Ground Truth): 1113
+  Total Predictions (INT8):        1125
+  True Positive (TP):              1109
+  False Positive (FP):             16
+  False Negative (FN):             4
+--------------------------------------------------
+  Precision:                       98.58 %
+  Recall:                          99.64 %
+  F1-Score:                        99.11 %
+  mAP@0.5:                         99.98 %
+--------------------------------------------------
+                   SPEED COMPARISON
+--------------------------------------------------
+  Baseline Model Average FPS:      9.8 FPS
+  INT8 Model Average FPS:          8.8 FPS
+  Speed Improvement:               0.9x Faster
+==================================================
+
+---
+
+## SECTION 2: RASPBERRY PI 5 TEST RESULTS
+
+### VIDEO 1: face-demographics-walking.mp4
+==================================================
+                  BENCHMARK METRICS
+==================================================
+  Total Real Faces (Ground Truth): 504
+  Total Predictions (INT8):        518
+  True Positive (TP):              502
+  False Positive (FP):             16
+  False Negative (FN):             2
+--------------------------------------------------
+  Precision:                       96.91 %
+  Recall:                          99.60 %
+  F1-Score:                        98.24 %
+  mAP@0.5:                         99.97 %
+--------------------------------------------------
+                   SPEED COMPARISON
+--------------------------------------------------
+  Baseline Model Average FPS:      5.2 FPS
+  INT8 Model Average FPS:          6.0 FPS
+  Speed Improvement:               1.2x Faster
+==================================================
+
+
+### VIDEO 2: face-demographics-walking-and-pause.mp4
+==================================================
+                  BENCHMARK METRICS
+==================================================
+  Total Real Faces (Ground Truth): 1113
+  Total Predictions (INT8):        1131
+  True Positive (TP):              1110
+  False Positive (FP):             21
+  False Negative (FN):             3
+--------------------------------------------------
+  Precision:                       98.14 %
+  Recall:                          99.73 %
+  F1-Score:                        98.93 %
+  mAP@0.5:                         99.98 %
+--------------------------------------------------
+                   SPEED COMPARISON
+--------------------------------------------------
+  Baseline Model Average FPS:      5.3 FPS
+  INT8 Model Average FPS:          6.1 FPS
+  Speed Improvement:               1.2x Faster
+==================================================
+
+---
+
+## EVALUATION:
+- The INT8 model maintained an average Recall and F1-Score of over 99.0% compared to the reference baseline model, demonstrating almost zero loss in biometric accuracy.
+- Face localization Precision remained exceptionally high (between 96.9% and 98.5%) across both PC and Raspberry Pi hardware platforms.
+- On the Raspberry Pi 5 hardware, the INT8 (Quantized) model demonstrated a consistent 20% (1.2x) speed improvement over the default floating-point model. Consequently, the INT8 configuration has been finalized for deployment on the embedded edge device.

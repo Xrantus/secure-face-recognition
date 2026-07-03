@@ -1,0 +1,15 @@
+numpy
+opencv-python
+ultralytics
+insightface
+onnxruntime
+
+# Libraries required for the Web Server (API)
+fastapi
+uvicorn
+python-multipart
+requests
+
+# Raspberry Pi only:
+# picamera2
+# lgpio
